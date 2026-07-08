@@ -59,3 +59,14 @@ def test_synonym_cancer():
     matches = get_synonyms().match("show me cancer cases")
     codes = {c for m in matches for c in m.codes}
     assert {"MO", "MR", "SC"} <= codes
+
+
+def test_synonym_whole_word_no_false_positive():
+    # 'ear' in 'year', 'ent' in 'government' must NOT match ENT.
+    assert get_synonyms().match("claims for full year 2025 in government hospitals") == []
+    assert get_synonyms().match("treatment for each patient") == []
+
+
+def test_synonym_ent_whole_word_matches():
+    codes = {c for m in get_synonyms().match("show me ENT cases") for c in m.codes}
+    assert "SL" in codes

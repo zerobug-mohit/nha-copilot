@@ -8,6 +8,7 @@ truth for the full procedure list and can be parsed later to enrich this map.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 # Canonical specialty code -> display name (PM-JAY HBP specialties).
@@ -121,12 +122,16 @@ class SpecialtyMatch:
 
 class SynonymResolver:
     def match(self, text: str) -> list[SpecialtyMatch]:
-        """Return every specialty phrase found in the text (longest first)."""
+        """Return every specialty phrase found in the text (longest first).
+
+        Uses WHOLE-WORD matching so short keys like 'ent'/'ear' don't falsely
+        match inside unrelated words ('governm-ent-', 'y-ear-').
+        """
         t = text.lower()
         found: list[SpecialtyMatch] = []
         seen_codes: set[str] = set()
         for phrase in sorted(_SYNONYMS, key=len, reverse=True):
-            if phrase in t:
+            if re.search(r"\b" + re.escape(phrase) + r"\b", t):
                 codes = [c for c in _SYNONYMS[phrase] if c not in seen_codes]
                 if codes:
                     seen_codes.update(codes)
