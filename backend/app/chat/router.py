@@ -27,6 +27,7 @@ class ChatResponse(BaseModel):
     chart: dict | None = None
     options: list[str] = []
     questions: list[dict] = []
+    analysis: dict | None = None
     context_chips: dict = {}
 
 
@@ -93,6 +94,7 @@ def chat_message(
         chart=result.chart,
         options=result.options,
         questions=result.questions,
+        analysis=result.analysis,
         context_chips=result.context_chips,
     )
 

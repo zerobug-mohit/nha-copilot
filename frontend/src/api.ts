@@ -31,6 +31,7 @@ export interface ChatResponse {
   chart?: ChartSpec | null;
   options?: string[];
   questions?: { question: string; options: string[] }[];
+  analysis?: { summary?: string; insights?: string[]; trends?: string[] } | null;
   context_chips: Record<string, string>;
 }
 

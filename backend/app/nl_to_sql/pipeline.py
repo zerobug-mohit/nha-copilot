@@ -57,6 +57,7 @@ class TurnResult:
     chart: dict[str, Any] | None = None
     options: list[str] = field(default_factory=list)  # quick-reply chips for clarify
     questions: list[dict[str, Any]] = field(default_factory=list)  # multi-question clarify form
+    analysis: dict[str, Any] | None = None  # {summary, insights[], trends[]}
     resolved: dict[str, Any] = field(default_factory=dict)
     # internal, for logging
     execution_status: str = "n/a"
@@ -226,9 +227,18 @@ def run_turn(
             resolved=resolved, context_chips=chips,
         )
 
-    # ---- Step 7: formatting ----
-    answer = _format_answer(answer_template, result.columns, result.rows)
+    # ---- Step 7: formatting + analysis ----
     chart = _sanitize_chart(gen.get("chart"), result.columns, result.rows)
+    # Second pass: structured analysis of the ACTUAL results (skip trivial
+    # single-value answers, where the template already says it).
+    analysis = None
+    if len(result.rows) >= 2:
+        analysis = analyze_results(question, result.columns, result.rows, llm)
+    answer = (
+        analysis["summary"]
+        if analysis and analysis.get("summary")
+        else _format_answer(answer_template, result.columns, result.rows)
+    )
     return TurnResult(
         action="answer",
         answer=answer,
@@ -236,6 +246,7 @@ def run_turn(
         columns=result.columns,
         rows=result.rows,
         chart=chart,
+        analysis=analysis,
         execution_status="success",
         resolved=resolved,
         context_chips=chips,
@@ -259,6 +270,50 @@ def _build_chips(resolved: dict, session_context: dict | None) -> dict:
             n for s in resolved["specialties"] for n in s["names"]
         )
     return chips
+
+
+_ANALYSIS_SYSTEM = (
+    "You are a senior data analyst for India's PM-JAY (Ayushman Bharat) health "
+    "scheme. You are given the ACTUAL results of a database query. Analyse the "
+    "numbers and return a JSON object with keys: "
+    '{"summary": string, "insights": string[], "trends": string[]}. '
+    "Rules: base EVERY statement strictly on the data provided — cite specific "
+    "categories and figures (largest/smallest, totals, shares/percentages, notable "
+    "gaps or concentration). Give 2–4 `insights`, each one concise sentence. Put "
+    "items in `trends` ONLY if there is a time or naturally ordered dimension "
+    "(otherwise return an empty list). Never invent data not present. Reply in the "
+    "SAME language and script as the user's question (English/Hindi/Hinglish)."
+)
+
+
+def analyze_results(
+    question: str, columns: list[str], rows: list[dict], llm
+) -> dict[str, Any] | None:
+    """Second pass: turn the fetched rows into a structured summary + insights.
+
+    Sends up to 50 rows (results are usually small aggregates) back to the LLM.
+    Results never contain PII (the safety layer forbids PII columns), so this is
+    safe to send. Returns None on any failure so the turn still succeeds."""
+    import json
+
+    sample = rows[:50]
+    user = (
+        f"User question: {question}\n"
+        f"Columns: {', '.join(columns)}\n"
+        f"Row count: {len(rows)}\n"
+        f"Data (JSON, up to 50 rows):\n{json.dumps(sample, default=str)}"
+    )
+    try:
+        out = llm.generate_json(_ANALYSIS_SYSTEM, user)
+    except Exception:  # noqa: BLE001
+        logger.warning("Analysis pass failed", exc_info=True)
+        return None
+    summary = str(out.get("summary") or "").strip()
+    insights = [str(x).strip() for x in (out.get("insights") or []) if str(x).strip()][:5]
+    trends = [str(x).strip() for x in (out.get("trends") or []) if str(x).strip()][:4]
+    if not summary and not insights:
+        return None
+    return {"summary": summary, "insights": insights, "trends": trends}
 
 
 def _sanitize_chart(

@@ -100,6 +100,19 @@ def test_ambiguous_district_offers_options():
     assert len(r.options) >= 2  # the alternative districts
 
 
+def test_analyze_results_parses():
+    fake = FakeLLM({"summary": "Gujarat leads.", "insights": ["A", "B"], "trends": []})
+    out = pipeline.analyze_results("q", ["state", "n"], [{"state": "GJ", "n": 5}, {"state": "UP", "n": 3}], fake)
+    assert out["summary"] == "Gujarat leads."
+    assert out["insights"] == ["A", "B"]
+    assert out["trends"] == []
+
+
+def test_analyze_results_none_on_empty():
+    fake = FakeLLM({"foo": "bar"})  # no summary/insights
+    assert pipeline.analyze_results("q", ["c"], [{"c": 1}], fake) is None
+
+
 def test_pii_sql_is_rejected(monkeypatch):
     set_llm_client(
         FakeLLM(

@@ -131,6 +131,9 @@ export default function MessageBubble({
           </span>
         )}
         <div className="whitespace-pre-wrap text-sm text-ink">{msg.text}</div>
+        {data?.analysis && (
+          <AnalysisBlock analysis={data.analysis} />
+        )}
         {action === "clarify" && onQuickReply && (
           data?.questions && data.questions.length > 0 ? (
             <ClarifyForm questions={data.questions} onSubmit={onQuickReply} />
@@ -157,6 +160,57 @@ export default function MessageBubble({
         )}
         {data?.sql && <SqlViewer sql={data.sql} />}
       </div>
+    </div>
+  );
+}
+
+// Structured analysis: key insights + trends grounded in the fetched data.
+function AnalysisBlock({
+  analysis,
+}: {
+  analysis: { summary?: string; insights?: string[]; trends?: string[] };
+}) {
+  const insights = analysis.insights ?? [];
+  const trends = analysis.trends ?? [];
+  if (insights.length === 0 && trends.length === 0) return null;
+  return (
+    <div className="mt-2.5 space-y-2.5 rounded-lg border border-line bg-surface-alt/50 p-3">
+      {insights.length > 0 && (
+        <div>
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-dark">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z" />
+            </svg>
+            Key insights
+          </div>
+          <ul className="space-y-1">
+            {insights.map((it, i) => (
+              <li key={i} className="flex gap-2 text-[13px] text-ink">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
+                <span>{it}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {trends.length > 0 && (
+        <div>
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-dark">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 17l6-6 4 4 8-8M21 7v5M21 7h-5" />
+            </svg>
+            Trends
+          </div>
+          <ul className="space-y-1">
+            {trends.map((it, i) => (
+              <li key={i} className="flex gap-2 text-[13px] text-ink">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+                <span>{it}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
