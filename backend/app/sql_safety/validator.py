@@ -1,0 +1,128 @@
+"""SQL validation and safety layer (§4.4).
+
+Sits between the LLM output and BigQuery. Independent of the system prompt: even
+if the LLM ignores its instructions, this layer rejects anything that is not a
+single read-only SELECT, and rejects any query that projects a PII column.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import sqlglot
+from sqlglot import exp
+
+# PII columns that must never be returned to a user (§4.4 step 2), across both
+# tables. Matched case-insensitively against any column referenced in output.
+PII_COLUMNS = {
+    # TMS claim side (tms_-prefixed in the merged table; bare names kept too so
+    # the guard still fires if the two source tables are ever queried directly)
+    "tms_patient_name",
+    "tms_patient_dob",
+    "tms_patient_mobile_number",
+    "patient_name",
+    "patient_dob",
+    "patient_mobile_number",
+    # BIS beneficiary side (original names in the merged table)
+    "name",
+    "father_name",
+    "aadhaar_no",
+    "abha_id",
+    "ben_mobile_no",
+    "ben_email_id",
+    "ben_ref_id",
+    "date_of_birth",
+    "obj_aadhar_vault",
+}
+
+# Statement types that are categorically rejected even if somehow parsed.
+_FORBIDDEN_EXPR = (
+    exp.Insert,
+    exp.Update,
+    exp.Delete,
+    exp.Drop,
+    exp.Create,
+    exp.Alter,
+    exp.Merge,
+    exp.Command,  # TRUNCATE, GRANT, COPY, etc. parse as Command
+)
+
+
+@dataclass
+class ValidationResult:
+    ok: bool
+    reason: str | None = None
+    pii_hit: list[str] = field(default_factory=list)
+
+
+def validate_sql(sql: str) -> ValidationResult:
+    sql = (sql or "").strip().rstrip(";").strip()
+    if not sql:
+        return ValidationResult(ok=False, reason="Empty query.")
+
+    # Parse (BigQuery dialect). Reject multi-statement input.
+    try:
+        statements = sqlglot.parse(sql, read="bigquery")
+    except Exception as exc:  # noqa: BLE001
+        return ValidationResult(ok=False, reason=f"Could not parse SQL: {exc}")
+
+    statements = [s for s in statements if s is not None]
+    if len(statements) != 1:
+        return ValidationResult(
+            ok=False, reason="Only a single SELECT statement is permitted."
+        )
+
+    stmt = statements[0]
+
+    # Root must be a SELECT (or a WITH ... SELECT / set operation over SELECTs).
+    if isinstance(stmt, _FORBIDDEN_EXPR):
+        return ValidationResult(
+            ok=False, reason=f"Non-SELECT statement rejected: {type(stmt).__name__}."
+        )
+    if not _is_read_only_select(stmt):
+        return ValidationResult(
+            ok=False, reason="Only read-only SELECT queries are permitted."
+        )
+
+    # Defence in depth: reject if any write keyword appears anywhere in the tree.
+    for node in stmt.walk():
+        if isinstance(node, _FORBIDDEN_EXPR):
+            return ValidationResult(
+                ok=False,
+                reason=f"Embedded non-SELECT operation rejected: {type(node).__name__}.",
+            )
+
+    # PII column scan across all referenced column names.
+    hits = sorted(
+        {
+            col.name.lower()
+            for col in stmt.find_all(exp.Column)
+            if col.name and col.name.lower() in PII_COLUMNS
+        }
+    )
+    # Also catch aliased projections like `SELECT patient_name AS n`.
+    for alias in stmt.find_all(exp.Alias):
+        inner = alias.this
+        if isinstance(inner, exp.Column) and inner.name.lower() in PII_COLUMNS:
+            hits.append(inner.name.lower())
+
+    hits = sorted(set(hits))
+    if hits:
+        return ValidationResult(
+            ok=False,
+            reason=f"Query references PII column(s): {', '.join(hits)}.",
+            pii_hit=hits,
+        )
+
+    return ValidationResult(ok=True)
+
+
+def _is_read_only_select(stmt: exp.Expression) -> bool:
+    if isinstance(stmt, (exp.Select, exp.Union, exp.Intersect, exp.Except)):
+        return True
+    # WITH ... SELECT
+    if isinstance(stmt, exp.With):
+        return _is_read_only_select(stmt.this)
+    # Subquery wrapper
+    if isinstance(stmt, exp.Subquery):
+        return _is_read_only_select(stmt.this)
+    return False

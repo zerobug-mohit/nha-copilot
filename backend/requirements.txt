@@ -1,0 +1,14 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+google-cloud-bigquery==3.27.0
+openai==2.31.0
+sqlglot==26.0.1
+python-jose[cryptography]==3.3.0
+bcrypt>=4.2
+slowapi==0.1.9
+openpyxl==3.1.5
+pdfplumber==0.11.4
+python-multipart==0.0.20
