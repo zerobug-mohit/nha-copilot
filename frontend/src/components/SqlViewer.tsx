@@ -1,11 +1,30 @@
 import { useState } from "react";
 
+// Light SQL pretty-printer: break before major clauses and indent, so the query
+// reads top-to-bottom and wraps within the panel (no horizontal scrolling).
+function formatSql(sql: string): string {
+  let s = (sql || "").replace(/\s+/g, " ").trim().replace(/\s*;\s*$/, "");
+  // Newline before top-level clauses (word-boundary, case-insensitive).
+  const clauses = [
+    "FROM", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "FULL JOIN", "JOIN",
+    "WHERE", "GROUP BY", "ORDER BY", "HAVING", "LIMIT", "UNION ALL", "UNION",
+  ];
+  for (const kw of clauses) {
+    const re = new RegExp("\\s+" + kw.replace(/ /g, "\\s+") + "\\b", "gi");
+    s = s.replace(re, "\n" + kw + " ");
+  }
+  // Indent boolean continuations inside WHERE/ON a little.
+  s = s.replace(/\s+\b(AND|OR)\b\s+/gi, "\n  $1 ");
+  return s.trim();
+}
+
 export default function SqlViewer({ sql }: { sql: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const pretty = formatSql(sql);
 
   async function copy() {
-    await navigator.clipboard.writeText(sql);
+    await navigator.clipboard.writeText(pretty);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -27,8 +46,8 @@ export default function SqlViewer({ sql }: { sql: string }) {
           >
             {copied ? "Copied" : "Copy"}
           </button>
-          <pre className="overflow-x-auto rounded bg-ink p-3 pr-16 text-[12px] leading-relaxed text-teal-100">
-            <code className="font-mono">{sql}</code>
+          <pre className="whitespace-pre-wrap break-words rounded bg-ink p-3 pr-16 text-[12px] leading-relaxed text-teal-100">
+            <code className="font-mono">{pretty}</code>
           </pre>
         </div>
       )}
