@@ -21,9 +21,7 @@ import { exportToExcel } from "../lib/exportExcel";
 import { exportChartToPptx } from "../lib/exportPptx";
 import { columnTotals, formatTotal } from "../lib/totals";
 
-// Brand hue for single-series (magnitude encoded by position, not color).
 const BRAND = "#0f7c8b";
-// Validated categorical palette (dataviz skill): worst adjacent CVD ΔE 24.2.
 const CATEGORICAL = [
   "#2a78d6", "#1baf7a", "#eda100", "#008300",
   "#4a3aa7", "#e34948", "#e87ba4", "#eb6834",
@@ -34,7 +32,6 @@ const GRID = "#e2e7ea";
 type ChartType = "bar" | "line" | "area" | "pie";
 type View = "chart" | "table";
 
-// HBP specialty codes -> names (short codes stay on a crowded axis; full on hover).
 const SPECIALTY: Record<string, string> = {
   BM: "Burns Management", ER: "Emergency Room", MC: "Cardiology",
   MG: "General Medicine", MM: "Mental Disorders", MN: "Neo-natal Care",
@@ -45,7 +42,6 @@ const SPECIALTY: Record<string, string> = {
   SS: "Pediatric Surgery", ST: "Polytrauma", SU: "Urology", SV: "CTVS",
   MD: "Dermatology", SD: "Dental",
 };
-// Coded flags are column-specific: "P" = Private (hospital) but Planned (admission).
 const COLUMN_MAPS: Record<string, Record<string, string>> = {
   hospital_type: { P: "Private", G: "Government" },
   tms_hospital_type: { P: "Private", G: "Government" },
@@ -59,7 +55,6 @@ const COLUMN_MAPS: Record<string, Record<string, string>> = {
   new_member_flag: { Y: "Yes", N: "No" },
 };
 
-/** Full, human-readable label for a value in a given column. */
 function fullLabel(col: string, v: unknown): string {
   const s = String(v ?? "—");
   const cl = (col || "").toLowerCase();
@@ -67,12 +62,10 @@ function fullLabel(col: string, v: unknown): string {
   const m = COLUMN_MAPS[cl];
   return (m && m[s]) || s;
 }
-/** Column name -> readable series label: total_paid_amount -> "Total paid amount". */
 const pretty = (s: string): string => {
   const t = String(s).replace(/_/g, " ").trim();
   return t.charAt(0).toUpperCase() + t.slice(1);
 };
-
 function compact(n: number): string {
   const a = Math.abs(n);
   if (a >= 1e7) return (n / 1e7).toFixed(1).replace(/\.0$/, "") + "Cr";
@@ -81,21 +74,21 @@ function compact(n: number): string {
   return String(n);
 }
 function toNum(v: unknown): number | null {
-  if (typeof v === "number") return v;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
   if (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))) return Number(v);
   return null;
 }
 
 function CustomTooltip({ active, payload, label, fmt }: any) {
   if (!active || !payload || !payload.length) return null;
-  const title = fmt(label ?? payload[0]?.name); // pie has no `label`
+  const title = fmt(label ?? payload[0]?.name);
   return (
     <div className="rounded border border-line bg-surface px-3 py-2 text-[12px] shadow-pop">
       <div className="mb-1 font-semibold text-ink">{title}</div>
       {payload.map((p: any) => (
         <div key={p.dataKey ?? p.name} className="flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color || p.payload?.fill }} />
-          <span className="text-ink-muted">{pretty(String(p.dataKey ?? p.name))}:</span>
+          <span className="text-ink-muted">{p.name}:</span>
           <span className="font-medium tabular-nums text-ink">
             {typeof p.value === "number" ? p.value.toLocaleString() : String(p.value)}
           </span>
@@ -108,6 +101,7 @@ function CustomTooltip({ active, payload, label, fmt }: any) {
 export default function ChartView({
   spec,
   rows,
+  columns,
   query,
   onDrill,
 }: {
@@ -120,31 +114,82 @@ export default function ChartView({
   const [view, setView] = useState<View>("chart");
   const [type, setType] = useState<ChartType>(spec.type);
 
-  const data = useMemo(() => {
-    const cleaned = rows.map((r) => {
-      const o: Record<string, unknown> = { [spec.x]: String(r[spec.x] ?? "—") };
-      for (const s of spec.series) o[s] = toNum(r[s]) ?? 0;
-      return o;
-    });
-    return cleaned.slice(0, type === "pie" ? 8 : 30);
-  }, [rows, spec, type]);
+  const cols = columns && columns.length ? columns : [spec.x, ...spec.series];
+  const fl = (v: unknown) => fullLabel(spec.x, v);
 
+  // Numeric columns (checked over all rows).
+  const numericCols = useMemo(
+    () =>
+      cols.filter(
+        (c) =>
+          rows.length > 0 &&
+          rows.every((r) => {
+            const v = r[c];
+            return v == null || v === "" || toNum(v) !== null;
+          }) &&
+          rows.some((r) => toNum(r[c]) !== null)
+      ),
+    [cols, rows]
+  );
+
+  // A second categorical dimension (besides spec.x) means the result is a
+  // two-dimension breakdown -> pivot it into grouped series.
+  const groupKey = cols.find((c) => c !== spec.x && !numericCols.includes(c)) || null;
+  const valueKey =
+    spec.series.find((s) => numericCols.includes(s)) ||
+    numericCols.find((c) => c !== spec.x) ||
+    spec.series[0];
+  const isPivot = !!groupKey && !!valueKey && numericCols.includes(valueKey);
+  const gl = (v: unknown) => (groupKey ? fullLabel(groupKey, v) : String(v));
+
+  // Measure selector (non-pivot, multiple numeric measures with mixed scales).
   const scalesComparable = useMemo(() => {
-    if (spec.series.length < 2) return true;
-    const maxes = spec.series.map((s) => Math.max(0, ...data.map((d) => Math.abs(Number(d[s]) || 0))));
+    if (isPivot || spec.series.length < 2) return true;
+    const maxes = spec.series.map((s) => Math.max(0, ...rows.map((r) => Math.abs(toNum(r[s]) || 0))));
     const hi = Math.max(...maxes);
     const lo = Math.min(...maxes.filter((m) => m > 0));
     return lo > 0 && hi / lo <= 25;
-  }, [data, spec.series]);
-
+  }, [rows, spec.series, isPivot]);
   const [measure, setMeasure] = useState<string>(
     spec.series.length < 2 || scalesComparable ? "all" : spec.series[0]
   );
-  const active = measure === "all" ? spec.series : [measure];
-  const multi = active.length > 1;
+  const activeSeries = isPivot ? [valueKey!] : measure === "all" ? spec.series : [measure];
+
+  // Build chartData + the series to plot, for either mode.
+  const { chartData, plotSeries } = useMemo(() => {
+    if (isPivot && groupKey && valueKey) {
+      const cats = [...new Set(rows.map((r) => String(r[spec.x] ?? "—")))];
+      const groups = [...new Set(rows.map((r) => String(r[groupKey] ?? "—")))];
+      const out = cats.map((cat) => {
+        const o: Record<string, unknown> = { [spec.x]: cat };
+        for (const g of groups) {
+          const m = rows.find(
+            (r) => String(r[spec.x] ?? "—") === cat && String(r[groupKey] ?? "—") === g
+          );
+          o[g] = m ? toNum(m[valueKey]) ?? 0 : 0;
+        }
+        return o;
+      });
+      return {
+        chartData: out.slice(0, 30),
+        plotSeries: groups.map((g) => ({ key: g, name: gl(g) })),
+      };
+    }
+    const cleaned = rows.map((r) => {
+      const o: Record<string, unknown> = { [spec.x]: String(r[spec.x] ?? "—") };
+      for (const s of activeSeries) o[s] = toNum(r[s]) ?? 0;
+      return o;
+    });
+    return {
+      chartData: cleaned.slice(0, type === "pie" ? 8 : 30),
+      plotSeries: activeSeries.map((s) => ({ key: s, name: pretty(s) })),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, spec, isPivot, groupKey, valueKey, type, measure]);
+
+  const multi = plotSeries.length > 1;
   const colorFor = (i: number) => (multi ? CATEGORICAL[i % CATEGORICAL.length] : BRAND);
 
-  const fl = (v: unknown) => fullLabel(spec.x, v);
   const drillable = !!(spec.drilldown && onDrill);
   const handleDrill = (payload: any) => {
     if (drillable && payload) {
@@ -153,27 +198,45 @@ export default function ChartView({
     }
   };
 
+  // Pie: one value per category (sum across groups in pivot mode).
+  const pieData = chartData.map((d) => ({
+    [spec.x]: d[spec.x],
+    __v: plotSeries.reduce((s, ps) => s + (Number(d[ps.key]) || 0), 0),
+  }));
+
+  // Table columns/rows.
+  const tableColumns = isPivot ? [spec.x, groupKey!, valueKey!] : [spec.x, ...spec.series];
+  const cellFmt = (col: string, val: unknown) => {
+    if (val == null || val === "") return "—";
+    if (numericCols.includes(col)) {
+      const n = toNum(val);
+      return n !== null ? n.toLocaleString() : String(val);
+    }
+    return fullLabel(col, val);
+  };
+
   const exportPpt = () =>
     exportChartToPptx({
       title: spec.title || "Result",
       type,
-      categories: data.map((d) => fl(d[spec.x])),
-      series: active.map((s) => ({ name: pretty(s), values: data.map((d) => Number(d[s]) || 0) })),
+      categories: chartData.map((d) => fl(d[spec.x])),
+      series: plotSeries.map((ps) => ({
+        name: ps.name,
+        values: chartData.map((d) => Number(d[ps.key]) || 0),
+      })),
       query,
     });
   const exportXlsx = () =>
     exportToExcel({
       title: spec.title || "Result",
-      columns: [spec.x, ...spec.series],
-      rows: data,
+      columns: tableColumns,
+      rows,
       query,
-      labelFor: (col, val) => (col === spec.x ? fl(val) : val == null ? "" : String(val)),
+      labelFor: (col, val) => cellFmt(col, val),
     });
 
-  // Axis labels: full when there's room (≤6 categories), short code when crowded.
-  // Always horizontal (never tilted); truncate an unusually long label — the full
-  // text still appears on hover.
-  const useFullAxis = data.length <= 6;
+  // Axis labels: full when there's room; always horizontal; truncate very long.
+  const useFullAxis = chartData.length <= 6;
   const axisText = (v: unknown) => {
     const t = useFullAxis ? fl(v) : String(v ?? "—");
     return t.length > 16 ? t.slice(0, 15) + "…" : t;
@@ -189,6 +252,20 @@ export default function ChartView({
     tickMargin: 8,
     minTickGap: 0,
   };
+
+  const renderSeries = (kind: "bar" | "line" | "area") =>
+    plotSeries.map((ps, i) =>
+      kind === "line" ? (
+        <Line key={ps.key} name={ps.name} type="monotone" dataKey={ps.key} stroke={colorFor(i)} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+      ) : kind === "area" ? (
+        <Area key={ps.key} name={ps.name} type="monotone" dataKey={ps.key} stroke={colorFor(i)} fill={colorFor(i)} fillOpacity={0.15} strokeWidth={2} />
+      ) : (
+        <Bar key={ps.key} name={ps.name} dataKey={ps.key} fill={colorFor(i)} radius={[4, 4, 0, 0]} maxBarSize={64}
+          onClick={(e: any) => handleDrill(e?.payload ?? e)} cursor={drillable ? "pointer" : "default"}>
+          {!multi && chartData.map((_, idx) => <Cell key={idx} fill={BRAND} />)}
+        </Bar>
+      )
+    );
 
   return (
     <figure className="mt-3 rounded-lg border border-line bg-surface p-3">
@@ -224,7 +301,7 @@ export default function ChartView({
         </div>
       </figcaption>
 
-      {spec.series.length > 1 && view === "chart" && type !== "pie" && (
+      {!isPivot && spec.series.length > 1 && view === "chart" && type !== "pie" && (
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-ink-faint">Measure:</span>
           {scalesComparable && (
@@ -240,60 +317,56 @@ export default function ChartView({
       )}
 
       {view === "table" ? (
-        <MiniTable columns={[spec.x, ...spec.series]} rows={data} xKey={spec.x} fmt={fl} />
+        <MiniTable columns={tableColumns} rows={rows} fmt={cellFmt} />
       ) : (
         <ResponsiveContainer width="100%" height={288}>
           {type === "pie" ? (
             <PieChart>
               <Tooltip content={(p: any) => <CustomTooltip {...p} fmt={fl} />} />
               <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v: any) => fl(v)} />
-              <Pie data={data} dataKey={active[0]} nameKey={spec.x} cx="50%" cy="50%" outerRadius={95} innerRadius={45} paddingAngle={2}
+              <Pie data={pieData} dataKey="__v" nameKey={spec.x} cx="50%" cy="50%" outerRadius={95} innerRadius={45} paddingAngle={2}
                 onClick={(e: any) => handleDrill(e?.payload ?? e)} cursor={drillable ? "pointer" : "default"}>
-                {data.map((_, i) => (
+                {pieData.map((_, i) => (
                   <Cell key={i} fill={CATEGORICAL[i % CATEGORICAL.length]} stroke="#fff" strokeWidth={2} />
                 ))}
               </Pie>
             </PieChart>
           ) : type === "line" ? (
-            <LineChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+            <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
               <CartesianGrid stroke={GRID} vertical={false} />
               <XAxis {...xAxisProps} />
               <YAxis tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} width={46} />
               <Tooltip content={(p: any) => <CustomTooltip {...p} fmt={fl} />} />
               {multi && <Legend wrapperStyle={{ fontSize: 12 }} />}
-              {active.map((s, i) => (
-                <Line key={s} name={pretty(s)} type="monotone" dataKey={s} stroke={colorFor(i)} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-              ))}
+              {renderSeries("line")}
             </LineChart>
           ) : type === "area" ? (
-            <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+            <AreaChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
               <CartesianGrid stroke={GRID} vertical={false} />
               <XAxis {...xAxisProps} />
               <YAxis tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} width={46} />
               <Tooltip content={(p: any) => <CustomTooltip {...p} fmt={fl} />} />
               {multi && <Legend wrapperStyle={{ fontSize: 12 }} />}
-              {active.map((s, i) => (
-                <Area key={s} name={pretty(s)} type="monotone" dataKey={s} stroke={colorFor(i)} fill={colorFor(i)} fillOpacity={0.15} strokeWidth={2} />
-              ))}
+              {renderSeries("area")}
             </AreaChart>
           ) : (
-            <BarChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 4 }} barCategoryGap="22%">
+            <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }} barCategoryGap="22%">
               <CartesianGrid stroke={GRID} vertical={false} />
               <XAxis {...xAxisProps} />
               <YAxis tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} width={46} />
               <Tooltip content={(p: any) => <CustomTooltip {...p} fmt={fl} />} cursor={{ fill: "rgba(15,124,139,0.06)" }} />
               {multi && <Legend wrapperStyle={{ fontSize: 12 }} />}
-              {active.map((s, i) => (
-                <Bar key={s} name={pretty(s)} dataKey={s} fill={colorFor(i)} radius={[4, 4, 0, 0]} maxBarSize={64}
-                  onClick={(e: any) => handleDrill(e?.payload ?? e)} cursor={drillable ? "pointer" : "default"}>
-                  {!multi && data.map((_, idx) => <Cell key={idx} fill={BRAND} />)}
-                </Bar>
-              ))}
+              {renderSeries("bar")}
             </BarChart>
           )}
         </ResponsiveContainer>
       )}
 
+      {isPivot && view === "chart" && type !== "pie" && (
+        <p className="mt-1 text-center text-[11px] text-ink-faint">
+          Grouped by {pretty(groupKey!)}.
+        </p>
+      )}
       {drillable && view === "chart" && (
         <p className="mt-1.5 text-center text-[11px] text-ink-faint">
           Tip: click a {type === "pie" ? "slice" : "bar"} to drill into {pretty(spec.drilldown!)}.
@@ -312,7 +385,7 @@ function MeasureBtn({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
-function MiniTable({ columns, rows, xKey, fmt }: { columns: string[]; rows: Record<string, unknown>[]; xKey: string; fmt: (v: unknown) => string }) {
+function MiniTable({ columns, rows, fmt }: { columns: string[]; rows: Record<string, unknown>[]; fmt: (col: string, val: unknown) => string }) {
   const totals = columnTotals(columns, rows);
   const showTotals = rows.length > 1 && Object.values(totals).some((v) => v !== null);
   return (
@@ -326,12 +399,10 @@ function MiniTable({ columns, rows, xKey, fmt }: { columns: string[]; rows: Reco
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
+          {rows.slice(0, 100).map((r, i) => (
             <tr key={i} className="border-b border-line/60 last:border-0">
               {columns.map((c) => (
-                <td key={c} className="px-3 py-1 tabular-nums text-ink">
-                  {c === xKey ? fmt(r[c]) : typeof r[c] === "number" ? (r[c] as number).toLocaleString() : String(r[c] ?? "—")}
-                </td>
+                <td key={c} className="px-3 py-1 tabular-nums text-ink">{fmt(c, r[c])}</td>
               ))}
             </tr>
           ))}
