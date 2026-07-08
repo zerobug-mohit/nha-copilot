@@ -272,16 +272,6 @@ export default function ChartView({
       <figcaption className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[13px] font-semibold text-ink">{spec.title || "Result"}</span>
         <div className="flex items-center gap-1">
-          {view === "chart" && (
-            <div className="mr-1 flex overflow-hidden rounded border border-line">
-              {(["bar", "line", "pie"] as ChartType[]).map((t) => (
-                <button key={t} onClick={() => setType(t)}
-                  className={`px-2 py-0.5 text-[11px] capitalize transition ${type === t ? "bg-brand text-white" : "bg-surface text-ink-muted hover:bg-brand-light"}`}>
-                  {t}
-                </button>
-              ))}
-            </div>
-          )}
           <div className="flex overflow-hidden rounded border border-line">
             {(["chart", "table"] as View[]).map((v) => (
               <button key={v} onClick={() => setView(v)}
@@ -290,6 +280,16 @@ export default function ChartView({
               </button>
             ))}
           </div>
+          {view === "chart" && (
+            <div className="ml-1 flex overflow-hidden rounded border border-line">
+              {(["bar", "line", "pie"] as ChartType[]).map((t) => (
+                <button key={t} onClick={() => setType(t)}
+                  className={`px-2 py-0.5 text-[11px] capitalize transition ${type === t ? "bg-brand text-white" : "bg-surface text-ink-muted hover:bg-brand-light"}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
           <button onClick={exportPpt} title="Download as an editable PowerPoint slide"
             className="rounded border border-line px-2 py-0.5 text-[11px] font-medium text-ink-muted transition hover:border-brand hover:text-brand">
             PPT
