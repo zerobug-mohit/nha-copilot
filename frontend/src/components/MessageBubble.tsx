@@ -15,6 +15,7 @@ export interface ChatMessage {
 export default function MessageBubble({
   msg,
   index,
+  query,
   onDrill,
   onQuickReply,
   isEditing = false,
@@ -26,6 +27,7 @@ export default function MessageBubble({
 }: {
   msg: ChatMessage;
   index: number;
+  query?: string;
   onDrill?: (value: string, dimension: string) => void;
   onQuickReply?: (text: string) => void;
   isEditing?: boolean;
@@ -147,10 +149,10 @@ export default function MessageBubble({
           ) : null
         )}
         {data?.chart && data.rows && data.rows.length > 1 ? (
-          <ChartView spec={data.chart} rows={data.rows} columns={data.columns} onDrill={onDrill} />
+          <ChartView spec={data.chart} rows={data.rows} columns={data.columns} query={query} onDrill={onDrill} />
         ) : (
           data?.columns && data.rows && data.rows.length > 0 && (
-            <ResultTable columns={data.columns} rows={data.rows} />
+            <ResultTable columns={data.columns} rows={data.rows} query={query} />
           )
         )}
         {data?.sql && <SqlViewer sql={data.sql} />}

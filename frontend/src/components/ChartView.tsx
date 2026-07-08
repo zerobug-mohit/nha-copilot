@@ -17,6 +17,8 @@ import {
   YAxis,
 } from "recharts";
 import type { ChartSpec } from "../api";
+import { exportToExcel } from "../lib/exportExcel";
+import { exportChartToPptx } from "../lib/exportPptx";
 import { columnTotals, formatTotal } from "../lib/totals";
 
 // Brand hue for single-series (magnitude encoded by position, not color).
@@ -106,11 +108,13 @@ function CustomTooltip({ active, payload, label, fmt }: any) {
 export default function ChartView({
   spec,
   rows,
+  query,
   onDrill,
 }: {
   spec: ChartSpec;
   rows: Record<string, unknown>[];
   columns?: string[];
+  query?: string;
   onDrill?: (value: string, dimension: string) => void;
 }) {
   const [view, setView] = useState<View>("chart");
@@ -148,6 +152,23 @@ export default function ChartView({
       if (val != null) onDrill!(fl(val), spec.drilldown!);
     }
   };
+
+  const exportPpt = () =>
+    exportChartToPptx({
+      title: spec.title || "Result",
+      type,
+      categories: data.map((d) => fl(d[spec.x])),
+      series: active.map((s) => ({ name: pretty(s), values: data.map((d) => Number(d[s]) || 0) })),
+      query,
+    });
+  const exportXlsx = () =>
+    exportToExcel({
+      title: spec.title || "Result",
+      columns: [spec.x, ...spec.series],
+      rows: data,
+      query,
+      labelFor: (col, val) => (col === spec.x ? fl(val) : val == null ? "" : String(val)),
+    });
 
   // Axis labels: full when there's room (≤6 categories), short code when crowded.
   // Always horizontal (never tilted); truncate an unusually long label — the full
@@ -192,6 +213,14 @@ export default function ChartView({
               </button>
             ))}
           </div>
+          <button onClick={exportPpt} title="Download as an editable PowerPoint slide"
+            className="rounded border border-line px-2 py-0.5 text-[11px] font-medium text-ink-muted transition hover:border-brand hover:text-brand">
+            PPT
+          </button>
+          <button onClick={exportXlsx} title="Download the data as Excel"
+            className="rounded border border-line px-2 py-0.5 text-[11px] font-medium text-ink-muted transition hover:border-brand hover:text-brand">
+            Excel
+          </button>
         </div>
       </figcaption>
 

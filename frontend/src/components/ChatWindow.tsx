@@ -153,6 +153,7 @@ export default function ChatWindow({
             key={i}
             index={i}
             msg={m}
+            query={messages[i - 1]?.text}
             isEditing={editingIndex === i}
             editingText={editingText}
             onStartEdit={busy ? undefined : startEdit}

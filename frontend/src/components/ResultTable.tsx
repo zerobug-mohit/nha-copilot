@@ -1,17 +1,33 @@
+import { exportToExcel } from "../lib/exportExcel";
 import { columnTotals, formatTotal } from "../lib/totals";
 
 export default function ResultTable({
   columns,
   rows,
+  query,
 }: {
   columns: string[];
   rows: Record<string, unknown>[];
+  query?: string;
 }) {
   if (!rows || rows.length === 0) return null;
   const totals = columnTotals(columns, rows);
   const showTotals = rows.length > 1 && Object.values(totals).some((v) => v !== null);
   return (
-    <div className="mt-3 overflow-x-auto rounded border border-line">
+    <div className="mt-3">
+      <div className="mb-1.5 flex justify-end">
+        <button
+          onClick={() => exportToExcel({ title: "Result", columns, rows, query })}
+          className="inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] font-medium text-ink-muted transition hover:border-brand hover:text-brand"
+          title="Download as formatted Excel"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+          </svg>
+          Excel
+        </button>
+      </div>
+      <div className="overflow-x-auto rounded border border-line">
       <table className="min-w-full border-collapse text-[13px]">
         <thead>
           <tr className="bg-surface-alt">
@@ -48,11 +64,12 @@ export default function ResultTable({
           </tfoot>
         )}
       </table>
-      {rows.length > 100 && (
-        <div className="bg-surface-alt px-3 py-1 text-[11px] text-ink-faint">
-          Showing first 100 of {rows.length} rows. (Total covers all {rows.length}.)
-        </div>
-      )}
+        {rows.length > 100 && (
+          <div className="bg-surface-alt px-3 py-1 text-[11px] text-ink-faint">
+            Showing first 100 of {rows.length} rows. (Total covers all {rows.length}.)
+          </div>
+        )}
+      </div>
     </div>
   );
 }
