@@ -223,12 +223,36 @@ Return a JSON object with exactly these keys:
   "action": "sql" | "clarify" | "out_of_scope",
   "sql": "the single SELECT statement (only when action = sql)",
   "answer_template": "one or two sentences describing what the result shows; refer to result columns by name",
+  "chart": {
+    "type": "bar" | "line" | "area" | "pie" | "none",
+    "x": "<the category/label column in the SELECT>",
+    "series": ["<numeric column to plot>", "..."],
+    "title": "<short chart title>",
+    "drilldown": "<optional: next dimension to break down by, e.g. 'district'>"
+  },
   "message": "the clarifying question or out-of-scope explanation (only when action != sql)"
 }
 ```
 
-- `action = "sql"`: provide `sql` + `answer_template` (and query exactly one table).
+- `action = "sql"`: provide `sql` + `answer_template`, and a `chart` suggestion.
 - `action = "clarify"`: provide `message` with exactly one question.
 - `action = "out_of_scope"`: provide `message` explaining why and what you *can* do.
+
+**Chart guidance** (drives an interactive visual in the UI):
+- Suggest a chart ONLY when the result has a category/time column plus a numeric
+  measure and more than one row. Pick the type by the job:
+  - magnitude across categories → `bar`
+  - trend over an ordered time column → `line` (or `area` for one series)
+  - part-to-whole with ≤ ~6 slices → `pie`
+- `x` = the label column; `series` = the numeric column(s) to plot. Alias SELECT
+  columns clearly (`AS total_paid`, `AS specialty`) so axes/legends read well.
+- Use `"type": "none"` (or omit `chart`) for a single scalar or a raw row listing.
+- **Set `drilldown` whenever a natural sub-dimension exists — for `pie` and `bar`
+  alike.** Common hierarchies in this data:
+  `state → district`, `district → hospital` (`tms_hospital_name`),
+  `specialty → procedure`, `hospital_type → specialty`,
+  `case_status → specialty`, `source_type → state`, `rural_urban_flag → district`.
+  Omit `drilldown` (do not write `"none"`) only when there is genuinely no
+  finer dimension. The user can click a bar/slice to drill into it.
 
 Never include prose outside the JSON. Never include PII columns in `sql`.

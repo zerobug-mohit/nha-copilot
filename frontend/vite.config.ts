@@ -1,16 +1,19 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+// In production the app is served from https://<user>.github.io/nha-copilot/,
+// so the base path must match the repo name. In dev it stays at "/".
+export default defineConfig(({ mode }) => ({
+  base: mode === "production" ? "/nha-copilot/" : "/",
   plugins: [react()],
   server: {
     port: 5173,
     proxy: {
-      // Proxy API calls to the FastAPI backend during development.
+      // Dev only: proxy API calls to the local FastAPI backend.
       "/auth": "http://localhost:8000",
       "/chat": "http://localhost:8000",
       "/query-log": "http://localhost:8000",
       "/health": "http://localhost:8000",
     },
   },
-});
+}));

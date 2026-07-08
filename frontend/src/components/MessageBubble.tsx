@@ -1,5 +1,6 @@
 import type { ChatResponse } from "../api";
 import Avatar from "./Avatar";
+import ChartView from "./ChartView";
 import ContextChips from "./ContextChips";
 import ResultTable from "./ResultTable";
 import SqlViewer from "./SqlViewer";
@@ -10,7 +11,13 @@ export interface ChatMessage {
   data?: ChatResponse;
 }
 
-export default function MessageBubble({ msg }: { msg: ChatMessage }) {
+export default function MessageBubble({
+  msg,
+  onDrill,
+}: {
+  msg: ChatMessage;
+  onDrill?: (value: string, dimension: string) => void;
+}) {
   const isUser = msg.sender === "user";
   const data = msg.data;
 
@@ -52,8 +59,12 @@ export default function MessageBubble({ msg }: { msg: ChatMessage }) {
           </span>
         )}
         <div className="whitespace-pre-wrap text-sm text-ink">{msg.text}</div>
-        {data?.columns && data.rows && data.rows.length > 0 && (
-          <ResultTable columns={data.columns} rows={data.rows} />
+        {data?.chart && data.rows && data.rows.length > 1 ? (
+          <ChartView spec={data.chart} rows={data.rows} columns={data.columns} onDrill={onDrill} />
+        ) : (
+          data?.columns && data.rows && data.rows.length > 0 && (
+            <ResultTable columns={data.columns} rows={data.rows} />
+          )
         )}
         {data?.sql && <SqlViewer sql={data.sql} />}
       </div>

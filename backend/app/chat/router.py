@@ -24,6 +24,7 @@ class ChatResponse(BaseModel):
     sql: str | None = None
     columns: list[str] = []
     rows: list[dict] = []
+    chart: dict | None = None
     context_chips: dict = {}
 
 
@@ -86,6 +87,7 @@ def chat_message(
         sql=result.sql,
         columns=result.columns,
         rows=_jsonable(result.rows),
+        chart=result.chart,
         context_chips=result.context_chips,
     )
 

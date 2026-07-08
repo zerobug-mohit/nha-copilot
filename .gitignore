@@ -17,3 +17,6 @@ service-account*.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Local data extracts
+backend/*.csv

@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-to-a-long-random-string"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 480
+    # Production users, set via env to override the dev seed accounts. Format:
+    #   APP_USERS="user1:password1:role1;user2:password2:role2"
+    # Roles: viewer | analyst | senior_analyst | admin. Empty = dev seed users.
+    app_users: str = ""
 
     # App
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

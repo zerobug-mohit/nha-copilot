@@ -1,0 +1,8 @@
+# Caddy reverse proxy with automatic HTTPS (Let's Encrypt).
+# SITE_ADDRESS is your public hostname — use a nip.io name derived from the VM's
+# external IP so you don't need to buy a domain, e.g. 34-93-1-2.nip.io
+# Set it in /etc/caddy/Caddyfile.env  ->  SITE_ADDRESS=34-93-1-2.nip.io
+{$SITE_ADDRESS} {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000
+}

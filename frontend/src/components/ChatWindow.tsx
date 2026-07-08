@@ -116,7 +116,16 @@ export default function ChatWindow({
           </div>
         )}
         {messages.map((m, i) => (
-          <MessageBubble key={i} msg={m} />
+          <MessageBubble
+            key={i}
+            msg={m}
+            onDrill={(value, dimension) => {
+              // Compose a self-contained drill query using the question that
+              // produced this chart (the preceding user message).
+              const origin = messages[i - 1]?.text ?? "";
+              submit(`${origin} — specifically for ${value}, broken down by ${dimension}`.trim());
+            }}
+          />
         ))}
         {busy && (
           <div className="flex justify-start gap-2 animate-in">

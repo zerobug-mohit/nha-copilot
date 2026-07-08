@@ -54,6 +54,7 @@ class TurnResult:
     columns: list[str] = field(default_factory=list)
     rows: list[dict[str, Any]] = field(default_factory=list)
     context_chips: dict[str, Any] = field(default_factory=dict)
+    chart: dict[str, Any] | None = None
     resolved: dict[str, Any] = field(default_factory=dict)
     # internal, for logging
     execution_status: str = "n/a"
@@ -207,12 +208,14 @@ def run_turn(
 
     # ---- Step 7: formatting ----
     answer = _format_answer(answer_template, result.columns, result.rows)
+    chart = _sanitize_chart(gen.get("chart"), result.columns, result.rows)
     return TurnResult(
         action="answer",
         answer=answer,
         sql=sql,
         columns=result.columns,
         rows=result.rows,
+        chart=chart,
         execution_status="success",
         resolved=resolved,
         context_chips=chips,
@@ -236,6 +239,45 @@ def _build_chips(resolved: dict, session_context: dict | None) -> dict:
             n for s in resolved["specialties"] for n in s["names"]
         )
     return chips
+
+
+def _sanitize_chart(
+    chart: Any, columns: list[str], rows: list[dict]
+) -> dict[str, Any] | None:
+    """Validate the LLM's chart suggestion against the real result set.
+
+    Returns a clean spec {type, x, series[], title, drilldown?} or None if the
+    result isn't chartable (scalar, <2 rows, unknown columns, no numeric series).
+    """
+    if not isinstance(chart, dict) or len(rows) < 2:
+        return None
+    ctype = str(chart.get("type", "")).lower()
+    if ctype not in ("bar", "line", "area", "pie"):
+        return None
+    colset = set(columns)
+    x = chart.get("x")
+    if x not in colset:
+        return None
+    series = [s for s in (chart.get("series") or []) if s in colset and s != x]
+    if not series:
+        # fall back to any numeric column that isn't x
+        series = [
+            c
+            for c in columns
+            if c != x and any(isinstance(r.get(c), (int, float)) for r in rows)
+        ]
+    if not series:
+        return None
+    spec = {
+        "type": ctype,
+        "x": x,
+        "series": series[:6],  # soft cap per the categorical series ladder
+        "title": str(chart.get("title") or "").strip(),
+    }
+    drill = chart.get("drilldown")
+    if isinstance(drill, str) and drill.strip().lower() not in ("", "none", "null", "na", "n/a"):
+        spec["drilldown"] = drill.strip()
+    return spec
 
 
 def _format_answer(template: str, columns: list[str], rows: list[dict]) -> str:

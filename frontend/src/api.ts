@@ -1,10 +1,23 @@
 // Typed client for the FastAPI backend.
+//
+// In dev, VITE_API_BASE is unset -> relative URLs go through the Vite proxy.
+// In production (GitHub Pages), set VITE_API_BASE to the backend's HTTPS URL.
+const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+const url = (path: string) => `${API_BASE}${path}`;
 
 export interface LoginResponse {
   access_token: string;
   token_type: string;
   role: string;
   username: string;
+}
+
+export interface ChartSpec {
+  type: "bar" | "line" | "area" | "pie";
+  x: string;
+  series: string[];
+  title?: string;
+  drilldown?: string;
 }
 
 export interface ChatResponse {
@@ -15,12 +28,13 @@ export interface ChatResponse {
   sql?: string | null;
   columns: string[];
   rows: Record<string, unknown>[];
+  chart?: ChartSpec | null;
   context_chips: Record<string, string>;
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
   const body = new URLSearchParams({ username, password });
-  const res = await fetch("/auth/login", {
+  const res = await fetch(url("/auth/login"), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -34,7 +48,7 @@ export async function sendMessage(
   message: string,
   sessionId: string | null
 ): Promise<ChatResponse> {
-  const res = await fetch("/chat/message", {
+  const res = await fetch(url("/chat/message"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
