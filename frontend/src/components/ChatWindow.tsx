@@ -33,10 +33,16 @@ export default function ChatWindow({
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [voiceLang, setVoiceLang] = useState<"en-IN" | "hi-IN">("en-IN");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingText, setEditingText] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  // Speech-to-text still needs one language hint; auto-pick from the browser
+  // locale (Hindi locale -> hi-IN, otherwise Indian English which also handles
+  // Hinglish). The text model detects language on its own regardless.
+  const voiceLang =
+    typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("hi")
+      ? "hi-IN"
+      : "en-IN";
   const { supported: voiceSupported, listening, start, stop } = useSpeechRecognition(
     voiceLang,
     setInput
@@ -189,41 +195,22 @@ export default function ChatWindow({
           className="flex items-center gap-2"
         >
           {voiceSupported && (
-            <>
-              {/* Voice language toggle */}
-              <div className="flex overflow-hidden rounded-full border border-line text-[11px]">
-                {(["en-IN", "hi-IN"] as const).map((l) => (
-                  <button
-                    key={l}
-                    type="button"
-                    onClick={() => setVoiceLang(l)}
-                    className={`px-2 py-1 transition ${
-                      voiceLang === l ? "bg-brand text-white" : "bg-surface text-ink-muted hover:bg-brand-light"
-                    }`}
-                    title={l === "en-IN" ? "Voice: English" : "Voice: Hindi / Hinglish"}
-                  >
-                    {l === "en-IN" ? "EN" : "हि"}
-                  </button>
-                ))}
-              </div>
-              {/* Mic button */}
-              <button
-                type="button"
-                onClick={() => (listening ? stop() : start())}
-                title={listening ? "Stop listening" : "Speak your question"}
-                aria-label="Voice input"
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition ${
-                  listening
-                    ? "border-danger bg-danger text-white pulse-glow"
-                    : "border-line-strong bg-surface text-ink-muted hover:border-brand hover:text-brand"
-                }`}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="2" width="6" height="12" rx="3" />
-                  <path d="M5 10a7 7 0 0 0 14 0M12 17v4" />
-                </svg>
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => (listening ? stop() : start())}
+              title={listening ? "Stop listening" : "Speak your question (English, हिंदी, or Hinglish)"}
+              aria-label="Voice input"
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition ${
+                listening
+                  ? "border-danger bg-danger text-white pulse-glow"
+                  : "border-line-strong bg-surface text-ink-muted hover:border-brand hover:text-brand"
+              }`}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="2" width="6" height="12" rx="3" />
+                <path d="M5 10a7 7 0 0 0 14 0M12 17v4" />
+              </svg>
+            </button>
           )}
           <input
             className="flex-1 rounded-full border border-line-strong bg-surface px-4 py-2.5 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
