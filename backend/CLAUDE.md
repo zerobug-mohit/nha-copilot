@@ -105,6 +105,30 @@ Maharashtra, Karnataka, Andhra Pradesh, Tamil Nadu, Telangana, West Bengal) — 
 chemo `MO*`, ECT `MM009A/MM010A` repeat per patient); cases count with `COUNT(*)`;
 paid amount = `amount_claim_paid`.
 
+**Claim status (`case_status` / `tms_case_status`) — payment state buckets.**
+There is **no single "Pending" value**; a claim's state is one of several strings.
+Known values (more may exist in production):
+`Claim Paid`, `Claim Rejected`, `Preauth Rejected`,
+`Claim Insurance Queried By CPD`, `Claim Insurance Queried By ACO`,
+`Claim Approved By SHA - Pending Payment`. Bucket them by pattern:
+- **Paid** → `case_status = 'Claim Paid'` (equivalently `paid_flag = TRUE`)
+- **Rejected** → `case_status LIKE '%Rejected%'`
+- **Pending / not yet paid / in-progress** → everything else (queried, approved-pending-payment)
+
+For "paid vs pending / yet to be paid / rejected" questions, return the buckets
+with a `CASE` expression — never invent a literal like `'Pending'` (it does not
+exist and returns nothing):
+```sql
+SELECT CASE
+         WHEN case_status = 'Claim Paid'    THEN 'Paid'
+         WHEN case_status LIKE '%Rejected%' THEN 'Rejected'
+         ELSE 'Pending'
+       END AS payment_state,
+       COUNT(*) AS claim_count
+FROM {TMS_TABLE}
+GROUP BY payment_state
+```
+
 ---
 
 ## 3. BIS — `{BIS_TABLE}` (registered beneficiaries)
