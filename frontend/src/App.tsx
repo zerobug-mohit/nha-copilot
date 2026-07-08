@@ -27,17 +27,25 @@ export default function App() {
   }
 
   return (
-    <div className="h-full">
-      {auth ? (
-        <ChatWindow
-          token={auth.token}
-          role={auth.role}
-          username={auth.username}
-          onLogout={handleLogout}
-        />
-      ) : (
-        <Login onLogin={handleLogin} />
-      )}
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1">
+        {auth ? (
+          <ChatWindow
+            token={auth.token}
+            role={auth.role}
+            username={auth.username}
+            onLogout={handleLogout}
+          />
+        ) : (
+          <Login onLogin={handleLogin} />
+        )}
+      </div>
+      <footer className="border-t border-line bg-surface px-4 py-1.5 text-center text-[11px] text-ink-faint">
+        For support, contact the developer at{" "}
+        <a href="mailto:mchaurasiya@wjcf.in" className="font-medium text-brand hover:underline">
+          mchaurasiya@wjcf.in
+        </a>
+      </footer>
     </div>
   );
 }
