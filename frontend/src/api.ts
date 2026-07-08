@@ -46,6 +46,11 @@ export async function login(username: string, password: string): Promise<LoginRe
   return res.json();
 }
 
+interface Delta {
+  prev: number;
+  change: number;
+  pct: number | null;
+}
 export interface WeeklyReport {
   period: { start: string; end: string };
   kpis: {
@@ -59,11 +64,29 @@ export interface WeeklyReport {
     paid_rate: number;
     states_covered: number;
     hospitals_active: number;
+    wow: { claims: Delta; patients: Delta; paid: Delta };
   };
-  by_state: { state: string; claims: number; paid: number }[];
+  by_gender: { gender: string; claims: number; patients: number }[];
+  by_age: { age_band: string; claims: number }[];
   by_specialty: { specialty: string; specialty_name?: string; claims: number; paid: number }[];
-  by_status: { payment_state: string; claims: number }[];
+  by_state: { state: string; claims: number; paid: number }[];
+  financial: {
+    total_paid: number;
+    total_approved: number;
+    approved_unpaid_amount: number;
+    approved_unpaid_count: number;
+    avg_paid_per_claim: number;
+  };
+  tat: { stage: string; median: number; p90: number }[];
+  by_status: { status: string; claims: number }[];
+  pending_by_stage: { stage: string; claims: number }[];
   by_hospital_type: { hospital_type: string; claims: number; paid: number }[];
+  portability: { portability: string; claims: number }[];
+  bis: {
+    new_enrollments: number;
+    total_registered: number;
+    card_status: { card_status: string; count: number }[];
+  };
   analysis: { summary?: string; insights?: string[]; trends?: string[] } | null;
 }
 
