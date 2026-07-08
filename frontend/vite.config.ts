@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => ({
       "/auth": "http://localhost:8000",
       "/chat": "http://localhost:8000",
       "/query-log": "http://localhost:8000",
+      "/report": "http://localhost:8000",
       "/health": "http://localhost:8000",
     },
   },

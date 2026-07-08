@@ -46,6 +46,39 @@ export async function login(username: string, password: string): Promise<LoginRe
   return res.json();
 }
 
+export interface WeeklyReport {
+  period: { start: string; end: string };
+  kpis: {
+    total_claims: number;
+    unique_patients: number;
+    paid_claims: number;
+    pending_claims: number;
+    rejected_claims: number;
+    total_paid: number;
+    avg_paid_per_claim: number;
+    paid_rate: number;
+    states_covered: number;
+    hospitals_active: number;
+  };
+  by_state: { state: string; claims: number; paid: number }[];
+  by_specialty: { specialty: string; specialty_name?: string; claims: number; paid: number }[];
+  by_status: { payment_state: string; claims: number }[];
+  by_hospital_type: { hospital_type: string; claims: number; paid: number }[];
+  analysis: { summary?: string; insights?: string[]; trends?: string[] } | null;
+}
+
+export async function fetchWeeklyReport(
+  token: string,
+  start: string,
+  end: string
+): Promise<WeeklyReport> {
+  const res = await fetch(url(`/report/weekly?start=${start}&end=${end}`), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Report failed (${res.status}): ${await res.text()}`);
+  return res.json();
+}
+
 export async function sendMessage(
   token: string,
   message: string,

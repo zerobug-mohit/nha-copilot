@@ -3,6 +3,7 @@ import { sendMessage } from "../api";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import Avatar from "./Avatar";
 import MessageBubble, { type ChatMessage } from "./MessageBubble";
+import WeeklyReport from "./WeeklyReport";
 
 const SUGGESTIONS = [
   "How many claims were paid, and the total amount?",
@@ -109,6 +110,7 @@ export default function ChatWindow({
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <WeeklyReport token={token} />
           <span className="hidden rounded-full border border-line bg-surface-alt px-2.5 py-0.5 text-[11px] font-medium text-ink-muted sm:inline">
             {username} · {ROLE_LABEL[role] ?? role}
           </span>
