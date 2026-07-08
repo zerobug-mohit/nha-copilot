@@ -1,5 +1,9 @@
 # NHA SHA Analytical Co-pilot (Prototype)
 
+[![Live App](https://img.shields.io/badge/%F0%9F%9A%80%20Live%20App-Open-0f7c8b?style=for-the-badge)](https://zerobug-mohit.github.io/nha-copilot/)
+
+> **Live demo:** https://zerobug-mohit.github.io/nha-copilot/
+
 A web-based **natural-language → SQL** chat co-pilot for NHA / SHA / HAAU
 officials to query PM-JAY **claims (TMS)** and **beneficiary (BIS)** data in
 plain English. Built to the v0.3 architecture (`../nha_query_tool_architecture.md`),
