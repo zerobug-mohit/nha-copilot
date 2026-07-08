@@ -55,6 +55,39 @@ const COLUMN_MAPS: Record<string, Record<string, string>> = {
   new_member_flag: { Y: "Yes", N: "No" },
 };
 
+// Value-set inference for when a column is aliased (so column-name mapping fails).
+// `sig` = distinguishing key(s) that must be present, so an ambiguous lone value
+// like "P" (Private vs Planned) is not mis-mapped.
+const VALUE_SETS: { sig: string[]; keys: string[]; map: Record<string, string> }[] = [
+  { sig: ["U", "R"], keys: ["U", "R"], map: { U: "Urban", R: "Rural" } },
+  { sig: ["M", "F"], keys: ["M", "F"], map: { M: "Male", F: "Female" } },
+  { sig: ["G"], keys: ["G", "P"], map: { G: "Government", P: "Private" } },
+  { sig: ["E"], keys: ["E", "P"], map: { E: "Emergency", P: "Planned" } },
+  { sig: ["D"], keys: ["N", "D"], map: { N: "Normal", D: "Death" } },
+  { sig: ["Y"], keys: ["Y", "N"], map: { Y: "Yes", N: "No" } },
+];
+
+/** Build a value->label function for a column, using its name first, then the set
+ *  of its actual values (handles SQL aliases), falling back to specialty codes. */
+function makeLabeler(col: string, values: unknown[]): (v: unknown) => string {
+  const cl = (col || "").toLowerCase();
+  if (cl.includes("special")) return (v) => SPECIALTY[String(v)] ?? String(v ?? "—");
+  if (COLUMN_MAPS[cl]) {
+    const m = COLUMN_MAPS[cl];
+    return (v) => m[String(v)] ?? String(v ?? "—");
+  }
+  const set = new Set(values.filter((v) => v != null && v !== "").map(String));
+  for (const vs of VALUE_SETS) {
+    const allIn = [...set].every((x) => vs.keys.includes(x));
+    const hasSig = vs.sig.some((k) => set.has(k));
+    if (set.size > 0 && allIn && hasSig) {
+      const m = vs.map;
+      return (v) => m[String(v)] ?? String(v ?? "—");
+    }
+  }
+  return (v) => SPECIALTY[String(v)] ?? String(v ?? "—");
+}
+
 function fullLabel(col: string, v: unknown): string {
   const s = String(v ?? "—");
   const cl = (col || "").toLowerCase();
@@ -115,7 +148,6 @@ export default function ChartView({
   const [type, setType] = useState<ChartType>(spec.type);
 
   const cols = columns && columns.length ? columns : [spec.x, ...spec.series];
-  const fl = (v: unknown) => fullLabel(spec.x, v);
 
   // Numeric columns (checked over all rows).
   const numericCols = useMemo(
@@ -140,7 +172,20 @@ export default function ChartView({
     numericCols.find((c) => c !== spec.x) ||
     spec.series[0];
   const isPivot = !!groupKey && !!valueKey && numericCols.includes(valueKey);
-  const gl = (v: unknown) => (groupKey ? fullLabel(groupKey, v) : String(v));
+
+  // Per-column value->label functions (name-based, then value-set inference for
+  // aliased columns). Used for the x-axis, legend, tooltips, table and exports.
+  const labelers = useMemo(() => {
+    const m: Record<string, (v: unknown) => string> = {};
+    for (const c of cols) {
+      if (!numericCols.includes(c)) m[c] = makeLabeler(c, rows.map((r) => r[c]));
+    }
+    return m;
+  }, [cols, rows, numericCols]);
+  const labelFor = (col: string, v: unknown) =>
+    labelers[col] ? labelers[col](v) : v == null || v === "" ? "—" : String(v);
+  const fl = (v: unknown) => labelFor(spec.x, v);
+  const gl = (v: unknown) => (groupKey ? labelFor(groupKey, v) : String(v));
 
   // Measure selector (non-pivot, multiple numeric measures with mixed scales).
   const scalesComparable = useMemo(() => {
@@ -212,7 +257,7 @@ export default function ChartView({
       const n = toNum(val);
       return n !== null ? n.toLocaleString() : String(val);
     }
-    return fullLabel(col, val);
+    return labelFor(col, val);
   };
 
   const exportPpt = () =>
