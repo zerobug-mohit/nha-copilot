@@ -22,7 +22,7 @@ export interface ChartSpec {
 
 export interface ChatResponse {
   session_id: string;
-  action: "answer" | "clarify" | "out_of_scope" | "error";
+  action: "answer" | "clarify" | "out_of_scope" | "error" | "chat";
   answer?: string | null;
   message?: string | null;
   sql?: string | null;

@@ -188,6 +188,9 @@ def run_turn(
     if action == "out_of_scope":
         return TurnResult(action="out_of_scope", message=gen.get("message"),
                           resolved=resolved, context_chips=chips)
+    if action == "chat":
+        return TurnResult(action="chat", message=gen.get("message"),
+                          resolved=resolved, context_chips=chips)
 
     sql = (gen.get("sql") or "").strip()
     answer_template = gen.get("answer_template") or ""
