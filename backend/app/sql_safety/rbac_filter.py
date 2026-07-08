@@ -21,18 +21,16 @@ from dataclasses import dataclass
 import sqlglot
 from sqlglot import exp
 
-# Columns that expose a given granularity. Names use the merged-table schema
-# (claim columns are tms_-prefixed); bare TMS names are kept so the guard still
-# works if the source tables are queried directly.
+# Columns that expose an INDIVIDUAL HOSPITAL's identity or bank details — the
+# genuinely hospital-level data restricted below senior_analyst. Hospital LOCATION
+# columns (hosp_district_name/hosp_state_name/hospital_district_cd/hospital_state_cd)
+# are deliberately NOT here: they're geography, needed for district-level analyses
+# like inbound/outbound portability, and don't reveal a specific hospital.
 HOSPITAL_COLUMNS = {
     "tms_hospital_code",
     "tms_hospital_name",
     "tms_hosp_pan_number",
     "tms_hosp_account_number",
-    "tms_hosp_district_name",
-    "tms_hosp_state_name",
-    "tms_hospital_state_cd",
-    "tms_hospital_district_cd",
     "tms_src_account_no",
     "tms_src_ifsc_code",
     "tms_ben_ifsc_code",
@@ -41,10 +39,9 @@ HOSPITAL_COLUMNS = {
     "hospital_name",
     "hosp_pan_number",
     "hosp_account_number",
-    "hosp_district_name",
-    "hosp_state_name",
-    "hospital_state_cd",
-    "hospital_district_cd",
+    "src_account_no",
+    "src_ifsc_code",
+    "ben_ifsc_code",
 }
 DISTRICT_COLUMNS = {
     # beneficiary district (merged, original names)
