@@ -286,13 +286,13 @@ def _format_answer(template: str, columns: list[str], rows: list[dict]) -> str:
     For a single scalar result we substitute the value inline; otherwise we
     summarise row/column counts and let the table carry the detail.
     """
+    # Keep the answer in the LLM's language (English/Hindi/Hinglish); the table or
+    # chart carries the row/column detail, so we don't append English summaries.
+    template = (template or "").strip()
     if not rows:
-        return (template or "No matching records were found.") + (
-            "" if template else ""
-        ) or "No matching records were found for that query."
+        return template or "No matching records were found."
     if len(rows) == 1 and len(columns) == 1:
         val = rows[0][columns[0]]
-        base = template.strip() or f"Result: {val}."
-        return f"{base} ({columns[0]} = {val})" if str(val) not in base else base
-    summary = f"Returned {len(rows)} row(s) across {len(columns)} column(s)."
-    return f"{template.strip()} {summary}".strip() if template else summary
+        base = template or f"{columns[0]}: {val}"
+        return base if str(val) in base else f"{base} ({columns[0]} = {val})"
+    return template or f"{len(rows)} rows returned."
