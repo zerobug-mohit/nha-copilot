@@ -246,6 +246,15 @@ one sub-type (e.g. "surgical oncology only").
 - Prototype claims window is FY2025-26.
 - Always add a sensible `LIMIT` (e.g. 100) on non-aggregated result sets.
 - Alias aggregates readably (`AS total_paid`, `AS patient_count`).
+- **Column naming per table (critical):** TMS and BIS use their **bare** column
+  names (e.g. `patient_state_name`, `speciality_code`, `amount_claim_paid`). The
+  **`tms_` prefix exists ONLY in the merged table**. So: never use a `tms_`-prefixed
+  name when you selected `{TMS_TABLE}` or `{BIS_TABLE}`, and use `tms_` names only
+  when you selected `{MERGED_TABLE}`. Every column you reference must exist in the
+  one table in your `FROM`.
+- **Standard age bands** (when asked "by age band/group"): `0-17, 18-30, 31-45,
+  46-60, 60+` via a `CASE` on `age` — use these and answer; don't ask the user to
+  define bands.
 
 ---
 

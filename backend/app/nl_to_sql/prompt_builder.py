@@ -75,13 +75,27 @@ def build_user_prompt(
             + json.dumps(resolved, default=str, indent=2)
         )
 
+    if _is_devanagari(question):
+        lang = (
+            "LANGUAGE (STRICT): the user's question is in DEVANAGARI (Hindi). You "
+            "MUST write `answer_template` / `message` / any `questions` & `options` "
+            "in Devanagari (Hindi) script. Do NOT romanize or reply in English."
+        )
+    else:
+        lang = (
+            "LANGUAGE: the user's question is in Latin script — reply in Latin "
+            "script (English if the question is English; Hinglish if it is romanized "
+            "Hindi/mixed). Do NOT use Devanagari. Match the question."
+        )
     parts.append(
         "Respond with the JSON object described in the governance doc "
-        "(keys: action, sql, answer_template, message). LANGUAGE — MIRROR THE "
-        "SCRIPT of the USER QUESTION above: if it has Devanagari characters, reply "
-        "in Hindi Devanagari (do NOT romanize); if it is Latin English words, reply "
-        "in English; if it is Latin Hindi/mixed words (Hinglish), reply in Hinglish "
-        "(Latin). Devanagari in → Devanagari out; Latin in → Latin out. The "
-        "conversation history is context only; it must not change your reply script."
+        "(keys: action, sql, answer_template, message). "
+        + lang
+        + " The conversation history is context only; it must not change your reply "
+        "language or script."
     )
     return "\n\n".join(parts)
+
+
+def _is_devanagari(text: str) -> bool:
+    return any("ऀ" <= ch <= "ॿ" for ch in (text or ""))

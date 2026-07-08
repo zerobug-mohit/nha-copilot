@@ -219,11 +219,16 @@ def run_turn(
             resolved=resolved, context_chips=chips,
         )
 
-    # ---- Step 6: execution ----
+    # ---- Step 6: execution (with one corrective retry on error) ----
     bq = get_bigquery_client()
     result = bq.run_select(sql)
     if not result.ok:
-        logger.warning("Execution error: %s", result.error)
+        logger.warning("Execution error, attempting one corrective retry: %s", result.error)
+        fixed = _retry_sql(llm, system_prompt, user_prompt, sql, result.error, role)
+        if fixed is not None:
+            sql, result = fixed
+    if not result.ok:
+        logger.warning("Execution error (after retry): %s", result.error)
         return TurnResult(
             action="error", message=FAILURE_MESSAGE, sql=sql,
             execution_status="error", error_message=result.error,
@@ -254,6 +259,31 @@ def run_turn(
         resolved=resolved,
         context_chips=chips,
     )
+
+
+def _retry_sql(llm, system_prompt, user_prompt, bad_sql, error, role):
+    """One corrective retry: feed the failed SQL + BigQuery error back and ask for
+    a fix. Returns (sql, QueryResult) if a corrected query runs, else None."""
+    fix_prompt = (
+        user_prompt
+        + "\n\nYOUR PREVIOUS SQL FAILED. Fix it and return the SAME JSON (action=sql).\n"
+        + f"Failed SQL:\n{bad_sql}\n\nBigQuery error:\n{error}\n\n"
+        + "Check exact column names and WHICH TABLE they belong to. The `tms_` "
+        + "prefix exists ONLY in the merged table; TMS and BIS use their bare column "
+        + "names (e.g. `patient_state_name`, not `tms_patient_state_name`). Do not "
+        + "reference a column that isn't in the table you selected."
+    )
+    try:
+        gen = llm.generate_json(system_prompt, fix_prompt)
+    except Exception:  # noqa: BLE001
+        return None
+    sql2 = (gen.get("sql") or "").strip()
+    if not sql2:
+        return None
+    if not validate_sql(sql2).ok or not check_rbac(sql2, role).allowed:
+        return None
+    result2 = get_bigquery_client().run_select(sql2)
+    return (sql2, result2)
 
 
 def _build_chips(resolved: dict, session_context: dict | None) -> dict:
@@ -303,8 +333,16 @@ def analyze_results(
     import json
 
     sample = rows[:50]
+    dev = any("ऀ" <= ch <= "ॿ" for ch in (question or ""))
+    lang_note = (
+        "Write summary/insights/trends in DEVANAGARI (Hindi) script — the question "
+        "is in Devanagari; do NOT romanize."
+        if dev
+        else "Write in Latin script matching the question (English or Hinglish); no Devanagari."
+    )
     user = (
         f"User question: {question}\n"
+        f"{lang_note}\n"
         f"Columns: {', '.join(columns)}\n"
         f"Row count: {len(rows)}\n"
         f"Data (JSON, up to 50 rows):\n{json.dumps(sample, default=str)}"
