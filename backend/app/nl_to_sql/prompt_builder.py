@@ -77,6 +77,11 @@ def build_user_prompt(
 
     parts.append(
         "Respond with the JSON object described in the governance doc "
-        '(keys: action, sql, answer_template, message).'
+        "(keys: action, sql, answer_template, message). LANGUAGE — MIRROR THE "
+        "SCRIPT of the USER QUESTION above: if it has Devanagari characters, reply "
+        "in Hindi Devanagari (do NOT romanize); if it is Latin English words, reply "
+        "in English; if it is Latin Hindi/mixed words (Hinglish), reply in Hinglish "
+        "(Latin). Devanagari in → Devanagari out; Latin in → Latin out. The "
+        "conversation history is context only; it must not change your reply script."
     )
     return "\n\n".join(parts)

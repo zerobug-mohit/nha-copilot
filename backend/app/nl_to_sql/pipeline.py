@@ -284,8 +284,11 @@ _ANALYSIS_SYSTEM = (
     "categories and figures (largest/smallest, totals, shares/percentages, notable "
     "gaps or concentration). Give 2–4 `insights`, each one concise sentence. Put "
     "items in `trends` ONLY if there is a time or naturally ordered dimension "
-    "(otherwise return an empty list). Never invent data not present. Reply in the "
-    "SAME language and script as the user's question (English/Hindi/Hinglish)."
+    "(otherwise return an empty list). Never invent data not present. LANGUAGE — "
+    "MIRROR THE SCRIPT of the user's question: Devanagari characters in the "
+    "question → write in Hindi Devanagari (do NOT romanize); Latin English → "
+    "English; Latin Hindi/mixed (Hinglish) → Hinglish in Latin. Devanagari in → "
+    "Devanagari out; Latin in → Latin out."
 )
 
 
