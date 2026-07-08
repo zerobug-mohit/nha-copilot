@@ -33,9 +33,9 @@ export default function Login({
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-brand text-lg font-bold text-white shadow-pop">
             NHA
           </div>
-          <h1 className="text-xl font-semibold text-ink">SHA Analytical Co-pilot</h1>
+          <h1 className="text-xl font-semibold text-ink">NHA Analytics Co-Pilot</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Ask PM-JAY claims &amp; beneficiary data in plain English.
+            Ask PM-JAY claims &amp; beneficiary data in natural language.
           </p>
         </div>
 

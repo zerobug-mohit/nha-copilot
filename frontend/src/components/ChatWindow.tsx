@@ -104,7 +104,7 @@ export default function ChatWindow({
           </div>
           <div>
             <h1 className="text-sm font-semibold leading-tight text-ink">
-              SHA Analytical Co-pilot
+              NHA Analytics Co-Pilot
             </h1>
             <p className="text-[11px] leading-tight text-ink-faint">
               PM-JAY claims &amp; beneficiary analytics
