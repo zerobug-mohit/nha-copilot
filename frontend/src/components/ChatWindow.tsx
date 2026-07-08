@@ -34,6 +34,8 @@ export default function ChatWindow({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [voiceLang, setVoiceLang] = useState<"en-IN" | "hi-IN">("en-IN");
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const { supported: voiceSupported, listening, start, stop } = useSpeechRecognition(
     voiceLang,
@@ -43,6 +45,25 @@ export default function ChatWindow({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
+
+  function startEdit(i: number) {
+    setEditingIndex(i);
+    setEditingText(messages[i].text);
+  }
+  function cancelEdit() {
+    setEditingIndex(null);
+    setEditingText("");
+  }
+  function submitEdit() {
+    if (editingIndex === null || !editingText.trim() || busy) return;
+    const i = editingIndex;
+    const text = editingText;
+    // Drop the edited message and everything after it, then resend.
+    setMessages((m) => m.slice(0, i));
+    setEditingIndex(null);
+    setEditingText("");
+    submit(text);
+  }
 
   async function submit(text: string) {
     if (!text.trim() || busy) return;
@@ -124,7 +145,14 @@ export default function ChatWindow({
         {messages.map((m, i) => (
           <MessageBubble
             key={i}
+            index={i}
             msg={m}
+            isEditing={editingIndex === i}
+            editingText={editingText}
+            onStartEdit={busy ? undefined : startEdit}
+            onEditChange={setEditingText}
+            onSubmitEdit={submitEdit}
+            onCancelEdit={cancelEdit}
             onDrill={(value, dimension) => {
               // Compose a self-contained drill query using the question that
               // produced this chart (the preceding user message).
