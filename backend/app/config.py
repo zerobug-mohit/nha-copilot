@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     gcp_project: str = "nha-conversational-analytics"
     bq_dataset: str = "nha_conversational_analytics"
     bq_tms_table: str = "TMS_Sample"
-    bq_bis_table: str = "BIS_Sample"
+    bq_bis_table: str = "BIS_Updated_Sample"
     # Single denormalised table the co-pilot queries (BIS LEFT JOIN TMS).
     bq_merged_table: str = "BIS_TMS_Sample_Merged"
     # Auth to BigQuery — provide EITHER of these (inline JSON takes precedence):

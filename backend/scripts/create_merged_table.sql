@@ -149,6 +149,6 @@ SELECT
   t.claim_tat AS tms_claim_tat,
   t.payment_tat AS tms_payment_tat,
   t.patient_mobile_number AS tms_patient_mobile_number
-FROM `nha-conversational-analytics.nha_conversational_analytics.BIS_Sample` b
+FROM `nha-conversational-analytics.nha_conversational_analytics.BIS_Updated_Sample` b
 LEFT JOIN `nha-conversational-analytics.nha_conversational_analytics.TMS_Sample` t
   ON t.member_id = b.card_no;
