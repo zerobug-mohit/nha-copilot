@@ -30,6 +30,7 @@ export interface ChatResponse {
   rows: Record<string, unknown>[];
   chart?: ChartSpec | null;
   options?: string[];
+  questions?: { question: string; options: string[] }[];
   context_chips: Record<string, string>;
 }
 

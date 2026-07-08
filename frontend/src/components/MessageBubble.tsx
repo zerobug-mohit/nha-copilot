@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ChatResponse } from "../api";
 import Avatar from "./Avatar";
 import ChartView from "./ChartView";
@@ -128,18 +129,22 @@ export default function MessageBubble({
           </span>
         )}
         <div className="whitespace-pre-wrap text-sm text-ink">{msg.text}</div>
-        {action === "clarify" && data?.options && data.options.length > 0 && onQuickReply && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {data.options.map((opt) => (
-              <button
-                key={opt}
-                onClick={() => onQuickReply(opt)}
-                className="rounded-full border border-brand/40 bg-brand-light px-3 py-1 text-[12px] font-medium text-brand-dark transition hover:bg-brand hover:text-white"
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
+        {action === "clarify" && onQuickReply && (
+          data?.questions && data.questions.length > 0 ? (
+            <ClarifyForm questions={data.questions} onSubmit={onQuickReply} />
+          ) : data?.options && data.options.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {data.options.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => onQuickReply(opt)}
+                  className="rounded-full border border-brand/40 bg-brand-light px-3 py-1 text-[12px] font-medium text-brand-dark transition hover:bg-brand hover:text-white"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          ) : null
         )}
         {data?.chart && data.rows && data.rows.length > 1 ? (
           <ChartView spec={data.chart} rows={data.rows} columns={data.columns} onDrill={onDrill} />
@@ -149,6 +154,78 @@ export default function MessageBubble({
           )
         )}
         {data?.sql && <SqlViewer sql={data.sql} />}
+      </div>
+    </div>
+  );
+}
+
+// A small "form" for a multi-question clarification: one option group per question
+// plus an optional free-text detail, submitted together so the model gets
+// everything it needs in one round.
+function ClarifyForm({
+  questions,
+  onSubmit,
+}: {
+  questions: { question: string; options: string[] }[];
+  onSubmit: (text: string) => void;
+}) {
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [extra, setExtra] = useState("");
+
+  const allAnswered = questions.every((_, i) => answers[i]);
+  const canSubmit = allAnswered || extra.trim().length > 0;
+
+  function submit() {
+    const parts = questions
+      .map((q, i) => (answers[i] ? `${q.question} ${answers[i]}` : null))
+      .filter(Boolean) as string[];
+    if (extra.trim()) parts.push(extra.trim());
+    const text = parts.join("; ");
+    if (text) onSubmit(text);
+  }
+
+  return (
+    <div className="mt-2 space-y-3">
+      {questions.map((q, qi) => (
+        <div key={qi}>
+          <div className="text-[12px] font-medium text-ink">{q.question}</div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {q.options.map((opt) => {
+              const selected = answers[qi] === opt;
+              return (
+                <button
+                  key={opt}
+                  onClick={() => setAnswers((a) => ({ ...a, [qi]: opt }))}
+                  className={`rounded-full px-3 py-1 text-[12px] font-medium transition ${
+                    selected
+                      ? "bg-brand text-white"
+                      : "border border-brand/40 bg-brand-light text-brand-dark hover:bg-brand hover:text-white"
+                  }`}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <input
+          value={extra}
+          onChange={(e) => setExtra(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && canSubmit) submit();
+          }}
+          placeholder="Add any other detail (optional)…"
+          className="flex-1 rounded-full border border-line-strong bg-surface px-3 py-1.5 text-[12px] outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+        />
+        <button
+          onClick={submit}
+          disabled={!canSubmit}
+          className="shrink-0 rounded-full bg-brand px-4 py-1.5 text-[12px] font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+        >
+          Get answer
+        </button>
       </div>
     </div>
   );

@@ -56,6 +56,7 @@ class TurnResult:
     context_chips: dict[str, Any] = field(default_factory=dict)
     chart: dict[str, Any] | None = None
     options: list[str] = field(default_factory=list)  # quick-reply chips for clarify
+    questions: list[dict[str, Any]] = field(default_factory=list)  # multi-question clarify form
     resolved: dict[str, Any] = field(default_factory=dict)
     # internal, for logging
     execution_status: str = "n/a"
@@ -175,8 +176,14 @@ def run_turn(
     if action == "clarify":
         raw_opts = gen.get("options") or []
         opts = [str(o).strip() for o in raw_opts if str(o).strip()][:5]
+        questions = []
+        for q in gen.get("questions") or []:
+            if isinstance(q, dict) and str(q.get("question") or "").strip():
+                q_opts = [str(o).strip() for o in (q.get("options") or []) if str(o).strip()][:6]
+                questions.append({"question": str(q["question"]).strip(), "options": q_opts})
         return TurnResult(action="clarify", message=gen.get("message"),
-                          options=opts, resolved=resolved, context_chips=chips)
+                          options=opts, questions=questions,
+                          resolved=resolved, context_chips=chips)
     if action == "out_of_scope":
         return TurnResult(action="out_of_scope", message=gen.get("message"),
                           resolved=resolved, context_chips=chips)

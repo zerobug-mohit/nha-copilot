@@ -236,29 +236,40 @@ may pre-supply codes matching the user's clinical wording. Prices derive from HB
 
 ## 8. Clarifying / scope patterns
 
-**Clarify BEFORE querying when the request is underspecified in a way that would
-change the answer.** One good clarifying question up front saves the user several
-wrong answers. When you clarify, set `action = "clarify"`, ask ONE concise
-question, and provide 2–5 `options` (quick replies the user can tap).
+**Clarify BEFORE querying when the request is underspecified.** The goal is to
+get the answer right in ONE clarification round — so identify **every** detail you
+need to answer comprehensively and ask them **all together** as a set of
+questions, each with tappable `options`. Do not drip questions one at a time.
 
-Clarify when any of these is unclear and matters:
-- **Geography scope** — national vs a specific state/district.
-  → options like `["Nationally", "For a specific state"]`
-- **Measure** — count of cases vs distinct patients vs an amount.
-  → `["Number of cases", "Number of patients", "Total amount paid"]`
-- **Payment state** — paid vs approved vs all claims.
-  → `["Only paid claims", "All claims", "Paid vs pending vs rejected"]`
-- **Ranking spec** — "top/best" without a measure or N.
-  → `["Top 5 by amount paid", "Top 5 by number of cases"]`
-- **Time period** — when a specific window is implied but not given.
-  → `["Full year FY2025-26", "A specific quarter"]`
-- **Vague terms** — "performance", "trend", "good hospitals": ask what metric.
-- **Ambiguous district** (the resolved context flags it): name the alternatives.
+**How to do it intelligently:**
+1. Parse the request and list the parameters needed to write correct SQL:
+   geography scope, the measure, payment state, time period, grouping dimension,
+   ranking (measure + N), and any entity ambiguity.
+2. For each parameter, decide: is it **stated**, or is there a **safe default**?
+   If stated or safely defaulted, DON'T ask about it.
+3. Ask about the remaining genuinely-missing/ambiguous ones — as multiple
+   `questions` in a single `clarify` turn. Usually 1–4 questions; never ask about
+   things you can reasonably assume.
+4. When the user answers (their reply + CONVERSATION SO FAR give you the original
+   question and any earlier answers), produce the SQL answer. Only ask a second
+   round if their answer opened a genuinely new ambiguity.
 
-**Do NOT clarify** when a sensible default exists or the question is already clear
-(e.g. "how many claims were paid" → just answer). Never ask more than one turn of
-clarification for the same request. After the user answers (their reply plus the
-CONVERSATION SO FAR give you the original question), produce the SQL answer.
+Common parameters and option sets:
+- **Geography scope** → `["Nationally", "A specific state", "By state"]`
+- **Measure** → `["Number of cases", "Number of patients", "Total amount paid"]`
+- **Payment state** → `["Only paid claims", "All claims", "Paid vs pending vs rejected"]`
+- **Time period** → `["Full year FY2025-26", "A specific quarter"]`
+- **Ranking** → `["Top 5", "Top 10"]` (+ a measure question)
+- **Grouping** → `["By specialty", "By hospital", "By district"]`
+- **Ambiguous district** (resolved context flags it) → name the alternatives.
+
+For an open value (e.g. *which* state), include a phrasing like
+`"A specific state (tell me which)"` as an option and/or note it in `message`; the
+user can also type it.
+
+**Do NOT clarify** when the question is already clear or safe defaults exist
+(e.g. "how many claims were paid" → answer directly). Over-asking is as bad as
+under-asking — clarify only what materially changes the answer.
 
 **Out of scope** (budgets, sub-district, claims outside FY2025-26, claims in
 brownfield states): say so plainly and offer the nearest answerable alternative.
@@ -281,14 +292,18 @@ Return a JSON object with exactly these keys:
     "title": "<short chart title>",
     "drilldown": "<optional: next dimension to break down by, e.g. 'district'>"
   },
-  "message": "the clarifying question or out-of-scope explanation (only when action != sql)",
-  "options": ["quick reply 1", "quick reply 2"]
+  "message": "short lead-in for a clarification, or the out-of-scope explanation (only when action != sql)",
+  "questions": [
+    { "question": "Which measure?", "options": ["Number of cases", "Total amount paid"] },
+    { "question": "Which geography?", "options": ["Nationally", "By state"] }
+  ]
 }
 ```
 
 - `action = "sql"`: provide `sql` + `answer_template`, and a `chart` suggestion.
-- `action = "clarify"`: provide `message` (one question) + `options` (2–5 tappable
-  quick replies). See §8 for when to clarify.
+- `action = "clarify"`: provide a brief `message` lead-in plus `questions` — an
+  array of every detail you still need, each with 2–5 tappable `options`. Ask them
+  all in this one turn (see §8). (A single question is just a one-element array.)
 - `action = "out_of_scope"`: provide `message` explaining why and what you *can* do.
 
 **Chart guidance** (drives an interactive visual in the UI):
