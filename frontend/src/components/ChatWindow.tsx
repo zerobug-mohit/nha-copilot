@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { sendMessage } from "../api";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import Avatar from "./Avatar";
+import Explorer from "./Explorer";
 import MessageBubble, { type ChatMessage } from "./MessageBubble";
 import WeeklyReport from "./WeeklyReport";
 
@@ -36,6 +37,7 @@ export default function ChatWindow({
   const [busy, setBusy] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [tab, setTab] = useState<"chat" | "explorer">("chat");
   const endRef = useRef<HTMLDivElement>(null);
   // Speech-to-text still needs one language hint; auto-pick from the browser
   // locale (Hindi locale -> hi-IN, otherwise Indian English which also handles
@@ -93,7 +95,7 @@ export default function ChatWindow({
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-3xl flex-col">
+    <div className="flex h-full flex-col">
       {/* Header */}
       <header className="flex items-center justify-between border-b border-line bg-surface px-5 py-3">
         <div className="flex items-center gap-2.5">
@@ -109,6 +111,19 @@ export default function ChatWindow({
             </p>
           </div>
         </div>
+        <div className="flex overflow-hidden rounded-full border border-line text-[13px]">
+          {(["chat", "explorer"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-1.5 font-medium capitalize transition ${
+                tab === t ? "bg-brand text-white" : "bg-surface text-ink-muted hover:bg-brand-light"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-3">
           <WeeklyReport token={token} />
           <span className="hidden rounded-full border border-line bg-surface-alt px-2.5 py-0.5 text-[11px] font-medium text-ink-muted sm:inline">
@@ -123,6 +138,18 @@ export default function ChatWindow({
         </div>
       </header>
 
+      {tab === "explorer" ? (
+        <div className="flex-1 overflow-y-auto">
+          <Explorer
+            token={token}
+            onExplore={(q) => {
+              setTab("chat");
+              submit(q);
+            }}
+          />
+        </div>
+      ) : (
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden">
       {/* Messages */}
       <main className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
         {messages.length === 0 && (
@@ -233,6 +260,8 @@ export default function ChatWindow({
           Answers are generated from synthetic PM-JAY data. Verify the SQL before acting on results.
         </p>
       </footer>
+        </div>
+      )}
     </div>
   );
 }

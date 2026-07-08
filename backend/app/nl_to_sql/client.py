@@ -54,6 +54,7 @@ class OpenAIClient(LLMClient):
 
 
 _client: LLMClient | None = None
+_explorer_client: LLMClient | None = None
 
 
 def get_llm_client() -> LLMClient:
@@ -61,6 +62,16 @@ def get_llm_client() -> LLMClient:
     if _client is None:
         _client = OpenAIClient()
     return _client
+
+
+def get_explorer_llm() -> LLMClient:
+    """A (possibly stronger) model used for Explorer idea generation."""
+    global _explorer_client
+    if _explorer_client is None:
+        settings = get_settings()
+        model = settings.openai_explorer_model.strip() or settings.openai_model
+        _explorer_client = OpenAIClient(model=model)
+    return _explorer_client
 
 
 def set_llm_client(client: LLMClient) -> None:

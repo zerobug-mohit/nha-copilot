@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.query_log.logger import init_db
 from app.query_log.router import router as query_log_router
 from app.rate_limit import limiter
+from app.explorer.router import router as explorer_router
 from app.report.router import router as report_router
 
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +43,7 @@ app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(query_log_router)
 app.include_router(report_router)
+app.include_router(explorer_router)
 
 
 @app.on_event("startup")

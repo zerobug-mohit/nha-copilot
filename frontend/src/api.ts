@@ -102,6 +102,30 @@ export async function fetchWeeklyReport(
   return res.json();
 }
 
+export interface ExplorerCard {
+  title: string;
+  question: string;
+  why?: string;
+  summary?: string;
+  insights?: string[];
+  chart?: ChartSpec | null;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  sql?: string | null;
+}
+export interface ExplorerData {
+  generated_at: string;
+  insights: ExplorerCard[];
+}
+
+export async function fetchExplorer(token: string, force = false): Promise<ExplorerData> {
+  const res = await fetch(url(`/explorer?force=${force}`), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Explorer failed (${res.status}): ${await res.text()}`);
+  return res.json();
+}
+
 export async function sendMessage(
   token: string,
   message: string,

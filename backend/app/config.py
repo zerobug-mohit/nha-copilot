@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
+    # A (typically stronger) model for the Explorer's idea generation. Falls back
+    # to openai_model when unset. e.g. "gpt-4.1" or a reasoning model.
+    openai_explorer_model: str = ""
 
     # Auth
     jwt_secret: str = "change-me-to-a-long-random-string"
