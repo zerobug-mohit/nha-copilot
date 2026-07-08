@@ -153,6 +153,7 @@ export default function ChatWindow({
             onEditChange={setEditingText}
             onSubmitEdit={submitEdit}
             onCancelEdit={cancelEdit}
+            onQuickReply={(text) => submit(text)}
             onDrill={(value, dimension) => {
               // Compose a self-contained drill query using the question that
               // produced this chart (the preceding user message).

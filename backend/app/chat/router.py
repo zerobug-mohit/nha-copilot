@@ -25,6 +25,7 @@ class ChatResponse(BaseModel):
     columns: list[str] = []
     rows: list[dict] = []
     chart: dict | None = None
+    options: list[str] = []
     context_chips: dict = {}
 
 
@@ -42,6 +43,7 @@ def chat_message(
         question=body.message,
         role=user.role,
         session_context=session.confirmed_context or None,
+        history=list(session.history),
     )
 
     # Persist confirmed context on a successful data answer.
@@ -88,6 +90,7 @@ def chat_message(
         columns=result.columns,
         rows=_jsonable(result.rows),
         chart=result.chart,
+        options=result.options,
         context_chips=result.context_chips,
     )
 

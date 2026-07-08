@@ -55,6 +55,7 @@ class TurnResult:
     rows: list[dict[str, Any]] = field(default_factory=list)
     context_chips: dict[str, Any] = field(default_factory=dict)
     chart: dict[str, Any] | None = None
+    options: list[str] = field(default_factory=list)  # quick-reply chips for clarify
     resolved: dict[str, Any] = field(default_factory=dict)
     # internal, for logging
     execution_status: str = "n/a"
@@ -116,14 +117,24 @@ def run_turn(
     role: str,
     session_context: dict | None = None,
     today: date | None = None,
+    history: list[dict] | None = None,
 ) -> TurnResult:
     resolved = resolve_entities(question, today=today)
 
     # ---- Step 2: deterministic short-circuits (semantic layer decisions) ----
     if resolved["ambiguous_geography"]:
+        # Offer the alternatives as quick-reply options.
+        alt = sorted(
+            {
+                f"{g['name']}, {g['state_name']}"
+                for g in resolved["geography"]
+                if g.get("name") and g.get("state_name")
+            }
+        )
         return TurnResult(
             action="clarify",
             message=resolved["ambiguous_geography"][0],
+            options=alt,
             resolved=resolved,
         )
 
@@ -147,7 +158,7 @@ def run_turn(
 
     # ---- Step 3: LLM SQL generation ----
     system_prompt = load_system_prompt()
-    user_prompt = build_user_prompt(question, role, session_context, resolved)
+    user_prompt = build_user_prompt(question, role, session_context, resolved, history)
     llm = get_llm_client()
     try:
         gen = llm.generate_json(system_prompt, user_prompt)
@@ -162,8 +173,10 @@ def run_turn(
     chips = _build_chips(resolved, session_context)
 
     if action == "clarify":
+        raw_opts = gen.get("options") or []
+        opts = [str(o).strip() for o in raw_opts if str(o).strip()][:5]
         return TurnResult(action="clarify", message=gen.get("message"),
-                          resolved=resolved, context_chips=chips)
+                          options=opts, resolved=resolved, context_chips=chips)
     if action == "out_of_scope":
         return TurnResult(action="out_of_scope", message=gen.get("message"),
                           resolved=resolved, context_chips=chips)

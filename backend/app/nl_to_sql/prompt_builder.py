@@ -39,9 +39,22 @@ def build_user_prompt(
     role: str,
     session_context: dict | None,
     resolved: dict | None,
+    history: list[dict] | None = None,
 ) -> str:
     """Assemble the user turn: the question plus all resolved context."""
-    parts = [f"USER QUESTION:\n{question}\n"]
+    parts = []
+    if history:
+        # Recent turns so a short reply (e.g. answering a clarification) keeps the
+        # original question's context. Only role + text, last few turns.
+        lines = []
+        for h in history[-6:]:
+            role_tag = "User" if h.get("role") == "user" else "Assistant"
+            content = str(h.get("content") or "").strip()
+            if content:
+                lines.append(f"{role_tag}: {content[:400]}")
+        if lines:
+            parts.append("CONVERSATION SO FAR (for context; the NEW question is below):\n" + "\n".join(lines))
+    parts.append(f"USER QUESTION:\n{question}\n")
     parts.append(f"CALLER ROLE: {role}")
     parts.append(
         "ROLE ACCESS: viewer=national/state aggregates; analyst=+district; "

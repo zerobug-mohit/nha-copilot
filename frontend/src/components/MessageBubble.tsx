@@ -15,6 +15,7 @@ export default function MessageBubble({
   msg,
   index,
   onDrill,
+  onQuickReply,
   isEditing = false,
   editingText = "",
   onStartEdit,
@@ -25,6 +26,7 @@ export default function MessageBubble({
   msg: ChatMessage;
   index: number;
   onDrill?: (value: string, dimension: string) => void;
+  onQuickReply?: (text: string) => void;
   isEditing?: boolean;
   editingText?: string;
   onStartEdit?: (index: number) => void;
@@ -126,6 +128,19 @@ export default function MessageBubble({
           </span>
         )}
         <div className="whitespace-pre-wrap text-sm text-ink">{msg.text}</div>
+        {action === "clarify" && data?.options && data.options.length > 0 && onQuickReply && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {data.options.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => onQuickReply(opt)}
+                className="rounded-full border border-brand/40 bg-brand-light px-3 py-1 text-[12px] font-medium text-brand-dark transition hover:bg-brand hover:text-white"
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
         {data?.chart && data.rows && data.rows.length > 1 ? (
           <ChartView spec={data.chart} rows={data.rows} columns={data.columns} onDrill={onDrill} />
         ) : (

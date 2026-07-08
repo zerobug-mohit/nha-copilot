@@ -78,6 +78,28 @@ def test_full_success_path(monkeypatch):
     assert r.context_chips.get("geography", "").lower().startswith("gujarat")
 
 
+def test_llm_clarify_passes_options_through():
+    set_llm_client(
+        FakeLLM(
+            {
+                "action": "clarify",
+                "message": "Do you want cases or amount paid?",
+                "options": ["Number of cases", "Total amount paid"],
+            }
+        )
+    )
+    r = pipeline.run_turn("show me the top hospitals", role="analyst")
+    assert r.action == "clarify"
+    assert r.options == ["Number of cases", "Total amount paid"]
+
+
+def test_ambiguous_district_offers_options():
+    set_llm_client(FakeLLM({"action": "sql", "sql": "SELECT 1"}))
+    r = pipeline.run_turn("claims in Aurangabad", role="analyst")
+    assert r.action == "clarify"
+    assert len(r.options) >= 2  # the alternative districts
+
+
 def test_pii_sql_is_rejected(monkeypatch):
     set_llm_client(
         FakeLLM(

@@ -29,6 +29,7 @@ export interface ChatResponse {
   columns: string[];
   rows: Record<string, unknown>[];
   chart?: ChartSpec | null;
+  options?: string[];
   context_chips: Record<string, string>;
 }
 
