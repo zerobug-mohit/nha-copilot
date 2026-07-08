@@ -225,6 +225,13 @@ Gynaecology, `SE`=Ophthalmology, `SB`=Orthopedics, `SN`=Neurosurgery, `SU`=Urolo
 may pre-supply codes matching the user's clinical wording. Prices derive from HBP
 2.0, not 2.2 — don't present them as authoritative 2.2 rates.
 
+**Umbrella clinical terms → answer with the union, don't clarify.** When a term
+maps to a known set of specialty codes, filter on ALL of them (`speciality_code IN
+(...)`) and answer, briefly stating which specialties you included. Do NOT ask the
+user to pick. e.g. "cancer/oncology" → `MO, MR, SC`; "cardiac/heart" → `MC, SV`;
+"maternity/delivery" → `SO`. Only clarify if the user explicitly signals they want
+one sub-type (e.g. "surgical oncology only").
+
 ---
 
 ## 7. BigQuery SQL conventions

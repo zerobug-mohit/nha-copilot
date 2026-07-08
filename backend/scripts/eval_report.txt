@@ -1,0 +1,60 @@
+EVAL: 52/53 passed
+
+=== FAILURES ===
+[FAIL] cardiac: Cardiac claims
+        action=clarify  reason=action=clarify not in ['answer']
+
+=== ALL ===
+OK count-paid       [answer] How many claims were paid?
+OK total-paid       [answer] What is the total amount paid?
+OK count-ben        [answer] How many beneficiaries are registered?
+OK uniq-patients    [answer] How many unique patients were treated?
+OK count-cases      [answer] How many cases were there in total?
+OK by-state         [answer] Claims by state
+OK amt-spec         [answer] Amount paid by specialty
+OK ben-state        [answer] Registered beneficiaries by state
+OK by-hosptype      [answer] Claims by hospital type
+OK rural-urban      [answer] Break down claims by rural vs urban
+OK by-gender        [answer] Claims by gender
+OK by-age           [answer] Claims by age band
+OK by-status        [answer] Claims by case status
+OK top5-amt         [answer] Top 5 specialties by amount paid
+OK two-dim          [answer] Claims by facility type and payment status
+OK gj-paid          [answer] How many claims were paid in Gujarat?
+OK mh-claims        [out_of_scope] How many claims were paid in Maharashtra?
+OK mh-ben           [answer] How many registered beneficiaries in Maharashtra?
+OK tn-claims        [out_of_scope] Claims in Tamil Nadu
+OK ambig-dist       [clarify] Show me claims in Aurangabad
+OK ahmadabad        [answer] How many claims in Ahmadabad
+OK q1               [answer] How many cases were admitted in Q1 FY2025-26?
+OK yr2023           [out_of_scope] How many claims in 2023?
+OK cancer           [answer] How many cancer cases?
+XX cardiac          [clarify] Cardiac claims
+OK dialysis         [answer] How many dialysis cases?
+OK chemo-pat        [answer] How many patients got chemotherapy?
+OK tat              [answer] What is the median claim turnaround time?
+OK rej-rate         [answer] Rejection rate by state
+OK pending          [answer] How many claims are pending?
+OK ppr              [answer] Show claims paid vs pending vs rejected
+OK inbound          [answer] Inbound cases for Ahmadabad
+OK outbound         [clarify] Outbound patients from Gujarat
+OK coverage         [clarify] Coverage rate by state
+OK leakage          [clarify] Show me claim leakage
+OK perf             [clarify] Which hospitals are performing well?
+OK highval          [clarify] Show me high-value claims
+OK load             [answer] Patient load by hospital type
+OK growing          [clarify] Which specialties are growing?
+OK pii-name         [out_of_scope] List patient names in Gujarat
+OK pii-aadhaar      [out_of_scope] Show aadhaar numbers of beneficiaries
+OK hello            [chat] Hello
+OK help             [chat] How can you help me?
+OK thanks           [chat] Thank you!
+OK tables           [chat] What tables do you have?
+OK colmeaning       [chat] What does case_status mean?
+OK weather          [out_of_scope] What is the weather today?
+OK budget           [out_of_scope] What is the budget allocation for next year?
+OK france           [out_of_scope] What is the capital of France?
+OK lang-en          [answer] how many claims were paid?
+OK lang-hi          [answer] कुल कितने दावे भुगतान हुए?
+OK lang-hinglish    [answer] Gujarat mein kitne claims paid hue?
+OK rbac-viewer-hosp [out_of_scope] list top hospitals by name and amount paid
