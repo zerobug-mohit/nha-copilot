@@ -17,6 +17,7 @@ import {
   YAxis,
 } from "recharts";
 import type { ChartSpec } from "../api";
+import { columnTotals, formatTotal } from "../lib/totals";
 
 // Brand hue for single-series (magnitude encoded by position, not color).
 const BRAND = "#0f7c8b";
@@ -283,6 +284,8 @@ function MeasureBtn({ active, onClick, children }: { active: boolean; onClick: (
 }
 
 function MiniTable({ columns, rows, xKey, fmt }: { columns: string[]; rows: Record<string, unknown>[]; xKey: string; fmt: (v: unknown) => string }) {
+  const totals = columnTotals(columns, rows);
+  const showTotals = rows.length > 1 && Object.values(totals).some((v) => v !== null);
   return (
     <div className="max-h-72 overflow-auto rounded border border-line">
       <table className="min-w-full text-[12px]">
@@ -304,6 +307,17 @@ function MiniTable({ columns, rows, xKey, fmt }: { columns: string[]; rows: Reco
             </tr>
           ))}
         </tbody>
+        {showTotals && (
+          <tfoot>
+            <tr className="border-t-2 border-line-strong bg-surface-alt font-semibold">
+              {columns.map((c, i) => (
+                <td key={c} className="px-3 py-1 tabular-nums text-ink">
+                  {totals[c] !== null ? formatTotal(totals[c] as number) : i === 0 ? "Total" : ""}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );
