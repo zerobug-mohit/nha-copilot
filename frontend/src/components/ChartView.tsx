@@ -309,7 +309,7 @@ export default function ChartView({
           ) : horizontal ? (
             <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: showLabels ? 52 : 24, bottom: 4, left: 8 }} barCategoryGap="20%">
               <CartesianGrid stroke={GRID} horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} domain={[0, (max: number) => max * 1.08]} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} />
               <YAxis type="category" dataKey={spec.x} tick={{ fontSize: 11, fill: AXIS }} tickFormatter={fl} width={130} interval={0} />
               <Tooltip content={(p: any) => <CustomTooltip {...p} fmt={fl} />} cursor={{ fill: "rgba(15,124,139,0.06)" }} />
               {multi && <Legend wrapperStyle={{ fontSize: 12 }} />}
@@ -319,7 +319,7 @@ export default function ChartView({
             <BarChart data={chartData} margin={{ top: showLabels ? 26 : 10, right: 16, bottom: 4, left: 4 }} barCategoryGap="22%">
               <CartesianGrid stroke={GRID} vertical={false} />
               <XAxis {...xAxisProps} />
-              <YAxis tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} width={46} domain={[0, (max: number) => max * 1.1]} allowDecimals={false} />
+              <YAxis tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} width={46} allowDecimals={false} />
               <Tooltip content={(p: any) => <CustomTooltip {...p} fmt={fl} />} cursor={{ fill: "rgba(15,124,139,0.06)" }} />
               {multi && <Legend wrapperStyle={{ fontSize: 12 }} />}
               {renderSeries("bar")}
