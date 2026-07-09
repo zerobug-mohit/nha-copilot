@@ -13,7 +13,7 @@ export interface LoginResponse {
 }
 
 export interface ChartSpec {
-  type: "bar" | "line" | "area" | "pie";
+  type: "bar" | "line" | "area" | "pie" | "map" | "none";
   x: string;
   series: string[];
   title?: string;
