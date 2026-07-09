@@ -1,11 +1,8 @@
 import { useMemo, useState } from "react";
-import { lazy, Suspense } from "react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-
-const StateMap = lazy(() => import("./StateMap"));
 import type { ChartSpec } from "../api";
 import { exportToExcel } from "../lib/exportExcel";
 import { exportChartToPptx } from "../lib/exportPptx";
@@ -23,7 +20,7 @@ const MAX_CATS_BAR = 14;   // categories in a bar chart; rest folds into "Other"
 const MAX_CATS_PIE = 6;    // slices in a pie; rest folds into "Other"
 const H_BAR_THRESHOLD = 8; // switch to horizontal bars beyond this many categories
 
-type ChartType = "bar" | "line" | "area" | "pie" | "map";
+type ChartType = "bar" | "line" | "area" | "pie";
 type View = "chart" | "table";
 
 const SPECIALTY: Record<string, string> = {
@@ -187,26 +184,15 @@ export default function ChartView({
 
   const multi = plotSeries.length > 1;
 
-  // State-level geography → offer a choropleth map (single measure only).
-  const isStateGeo = /state/i.test(spec.x) && !/status/i.test(spec.x) && !multi && !isPivot && !tooManyGroups;
-  const geoData = useMemo(() => {
-    if (!isStateGeo) return [];
-    const key = valueKey || spec.series[0];
-    const m = new Map<string, number>();
-    for (const r of rows) { const s = String(r[spec.x] ?? ""); if (s) m.set(s, (m.get(s) || 0) + (toNum(r[key]) || 0)); }
-    return [...m.entries()].map(([name, value]) => ({ name, value }));
-  }, [rows, spec, valueKey, isStateGeo]);
-
   // ---- Which chart types make sense for THIS data ----
   const catCount = chartData.length;
   const allowed: ChartType[] = [];
-  if (isStateGeo) allowed.push("map");
   allowed.push("bar");
   if (xIsTime) allowed.push("line");
   if (!multi && catCount <= MAX_CATS_PIE + 1) allowed.push("pie"); // +1 to allow with an Other slice
   const wanted = (spec.type === "area" ? "line" : spec.type) as ChartType;
   const [type, setType] = useState<ChartType>(
-    isStateGeo ? "map" : allowed.includes(wanted) ? wanted : xIsTime ? "line" : "bar"
+    allowed.includes(wanted) ? wanted : xIsTime ? "line" : "bar"
   );
   const chartType = allowed.includes(type) ? type : allowed[0];
 
@@ -235,7 +221,7 @@ export default function ChartView({
   };
 
   const exportPpt = () => exportChartToPptx({
-    title: spec.title || "Result", type: chartType === "map" ? "bar" : chartType,
+    title: spec.title || "Result", type: chartType,
     categories: chartData.map((d) => fl(d[spec.x])),
     series: plotSeries.map((ps) => ({ name: ps.name, values: chartData.map((d) => Number(d[ps.key]) || 0) })),
     query,
@@ -301,10 +287,6 @@ export default function ChartView({
 
       {view === "table" ? (
         <MiniTable columns={tableColumns} rows={rows} fmt={cellFmt} />
-      ) : chartType === "map" ? (
-        <Suspense fallback={<div className="flex h-[360px] items-center justify-center text-sm text-ink-faint">Loading map…</div>}>
-          <StateMap data={geoData} valueName={plotSeries[0]?.name || "Value"} onStateClick={drillable ? (name) => onDrill!(name, spec.drilldown!) : undefined} />
-        </Suspense>
       ) : (
         <ResponsiveContainer width="100%" height={chartHeight}>
           {chartType === "pie" ? (
@@ -325,18 +307,19 @@ export default function ChartView({
               {renderSeries("line")}
             </LineChart>
           ) : horizontal ? (
-            <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }} barCategoryGap="20%">
+            <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: showLabels ? 52 : 24, bottom: 4, left: 8 }} barCategoryGap="20%">
               <CartesianGrid stroke={GRID} horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} domain={[0, (max: number) => max * 1.08]} />
               <YAxis type="category" dataKey={spec.x} tick={{ fontSize: 11, fill: AXIS }} tickFormatter={fl} width={130} interval={0} />
               <Tooltip content={(p: any) => <CustomTooltip {...p} fmt={fl} />} cursor={{ fill: "rgba(15,124,139,0.06)" }} />
               {multi && <Legend wrapperStyle={{ fontSize: 12 }} />}
               {renderSeries("bar")}
             </BarChart>
           ) : (
-            <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }} barCategoryGap="22%">
+            <BarChart data={chartData} margin={{ top: showLabels ? 26 : 10, right: 16, bottom: 4, left: 4 }} barCategoryGap="22%">
               <CartesianGrid stroke={GRID} vertical={false} />
-              <XAxis {...xAxisProps} /><YAxis tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} width={46} />
+              <XAxis {...xAxisProps} />
+              <YAxis tick={{ fontSize: 11, fill: AXIS }} tickFormatter={compact} width={46} domain={[0, (max: number) => max * 1.1]} allowDecimals={false} />
               <Tooltip content={(p: any) => <CustomTooltip {...p} fmt={fl} />} cursor={{ fill: "rgba(15,124,139,0.06)" }} />
               {multi && <Legend wrapperStyle={{ fontSize: 12 }} />}
               {renderSeries("bar")}

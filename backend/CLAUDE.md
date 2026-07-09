@@ -374,7 +374,7 @@ Return a JSON object with exactly these keys:
   "sql": "the single SELECT statement (only when action = sql)",
   "answer_template": "one or two sentences describing what the result shows; refer to result columns by name",
   "chart": {
-    "type": "bar" | "line" | "area" | "pie" | "map" | "none",
+    "type": "bar" | "line" | "area" | "pie" | "none",
     "x": "<the category/label column in the SELECT>",
     "series": ["<numeric column to plot>", "..."],
     "title": "<short chart title>",
@@ -410,11 +410,6 @@ single representation for the data — don't default to bar for everything:
     ONLY IF it has **few (≤ 5) distinct values** (e.g. hospital_type, gender,
     payment status). Return it as a normal column in the SELECT and the UI shows a
     clean grouped bar.
-  - **one value per state / geographic comparison across states** → `map`. Set
-    `x` to the state-name column (alias it `AS state`) and `series` to the single
-    measure. The UI draws a choropleth of India shaded by the measure. Use `map`
-    ONLY for a single measure broken down by state (not by district, not with a
-    second dimension) — otherwise fall back to `bar`.
 - **Avoid clutter — never produce a chart with many series.** If a breakdown's
   second dimension is high-cardinality (districts, hospitals, specialties: often
   10–40 values), do NOT cross it with another dimension. Instead pick ONE primary
