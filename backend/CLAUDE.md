@@ -396,14 +396,29 @@ Return a JSON object with exactly these keys:
   the user's language + 2–3 example questions. No SQL.
 - `action = "out_of_scope"`: provide `message` explaining why and what you *can* do.
 
-**Chart guidance** (drives an interactive visual in the UI):
+**Chart guidance** (drives an interactive visual in the UI). Think about the BEST
+single representation for the data — don't default to bar for everything:
 - Suggest a chart ONLY when the result has a category/time column plus a numeric
-  measure and more than one row. Pick the type by the job:
-  - magnitude across categories → `bar`
-  - trend over an ordered time column → `line` (or `area` for one series)
-  - part-to-whole with ≤ ~6 slices → `pie`
-- `x` = the label column; `series` = the numeric column(s) to plot. Alias SELECT
-  columns clearly (`AS total_paid`, `AS specialty`) so axes/legends read well.
+  measure and more than one row. Choose ONE `type` by the job:
+  - **ranking / magnitude across categories** → `bar` (the UI auto-switches to a
+    horizontal bar when there are many or long-named categories).
+  - **trend over an ordered time column** (month/quarter/date) → `line`.
+  - **part-to-whole** where the parts sum to a meaningful whole and there are
+    **≤ 6 slices** (e.g. paid/pending/rejected, government/private, rural/urban)
+    → `pie`.
+  - **breakdown by a SECOND categorical dimension** → keep the second dimension
+    ONLY IF it has **few (≤ 5) distinct values** (e.g. hospital_type, gender,
+    payment status). Return it as a normal column in the SELECT and the UI shows a
+    clean grouped bar.
+- **Avoid clutter — never produce a chart with many series.** If a breakdown's
+  second dimension is high-cardinality (districts, hospitals, specialties: often
+  10–40 values), do NOT cross it with another dimension. Instead pick ONE primary
+  dimension and, for "top" questions, `ORDER BY` the measure and `LIMIT` to the
+  top ~10–15. A 30-way grouped chart is unreadable — prefer a ranked bar or a
+  single-dimension breakdown.
+- `x` = the label column; `series` = the numeric measure column(s). Alias SELECT
+  columns clearly (`AS total_paid`, `AS specialty`). For a two-dimension grouped
+  chart, put the small 2nd dimension as its own column and the measure as another.
 - Use `"type": "none"` (or omit `chart`) for a single scalar or a raw row listing.
 - **Set `drilldown` whenever a natural sub-dimension exists — for `pie` and `bar`
   alike.** Common hierarchies in this data:
