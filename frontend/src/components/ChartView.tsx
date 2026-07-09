@@ -7,72 +7,17 @@ import type { ChartSpec } from "../api";
 import { exportToExcel } from "../lib/exportExcel";
 import { exportChartToPptx } from "../lib/exportPptx";
 import { columnTotals, formatTotal } from "../lib/totals";
+import {
+  analyze, buildChartData, allowedTypes, defaultType, layout,
+  compact, pretty, toNum, MAX_CATS_BAR, OTHER, type ChartType,
+} from "../lib/chartEngine";
 
 const BRAND = "#0f7c8b";
 const CATEGORICAL = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"];
 const AXIS = "#6a7b83";
 const GRID = "#e2e7ea";
-const OTHER = "Other";
 
-// Readability caps.
-const MAX_SERIES = 6;      // grouped series beyond this = unreadable -> don't pivot
-const MAX_CATS_BAR = 14;   // categories in a bar chart; rest folds into "Other"
-const MAX_CATS_PIE = 6;    // slices in a pie; rest folds into "Other"
-const H_BAR_THRESHOLD = 8; // switch to horizontal bars beyond this many categories
-
-type ChartType = "bar" | "line" | "area" | "pie";
 type View = "chart" | "table";
-
-const SPECIALTY: Record<string, string> = {
-  BM: "Burns Management", ER: "Emergency Room", MC: "Cardiology", MG: "General Medicine",
-  MM: "Mental Disorders", MN: "Neo-natal Care", MO: "Medical Oncology", MR: "Radiation Oncology",
-  SB: "Orthopedics", SC: "Surgical Oncology", SE: "Ophthalmology", SG: "General Surgery",
-  SL: "ENT", SM: "Oral & Maxillofacial", SN: "Neurosurgery", SO: "Obstetrics & Gynaecology",
-  SP: "Plastic & Reconstructive", SS: "Pediatric Surgery", ST: "Polytrauma", SU: "Urology",
-  SV: "CTVS", MD: "Dermatology", SD: "Dental",
-};
-const COLUMN_MAPS: Record<string, Record<string, string>> = {
-  hospital_type: { P: "Private", G: "Government" }, tms_hospital_type: { P: "Private", G: "Government" },
-  rural_urban_flag: { U: "Urban", R: "Rural" }, gender: { M: "Male", F: "Female" },
-  tms_gender: { M: "Male", F: "Female" }, admission_type: { E: "Emergency", P: "Planned" },
-  tms_admission_type: { E: "Emergency", P: "Planned" }, discharge_type: { N: "Normal", D: "Death" },
-  tms_discharge_type: { N: "Normal", D: "Death" }, new_member_flag: { Y: "Yes", N: "No" },
-};
-const VALUE_SETS: { sig: string[]; keys: string[]; map: Record<string, string> }[] = [
-  { sig: ["U", "R"], keys: ["U", "R"], map: { U: "Urban", R: "Rural" } },
-  { sig: ["M", "F"], keys: ["M", "F"], map: { M: "Male", F: "Female" } },
-  { sig: ["G"], keys: ["G", "P"], map: { G: "Government", P: "Private" } },
-  { sig: ["E"], keys: ["E", "P"], map: { E: "Emergency", P: "Planned" } },
-  { sig: ["D"], keys: ["N", "D"], map: { N: "Normal", D: "Death" } },
-  { sig: ["Y"], keys: ["Y", "N"], map: { Y: "Yes", N: "No" } },
-];
-
-function makeLabeler(col: string, values: unknown[]): (v: unknown) => string {
-  const cl = (col || "").toLowerCase();
-  if (cl.includes("special")) return (v) => (v === OTHER ? OTHER : SPECIALTY[String(v)] ?? String(v ?? "—"));
-  if (COLUMN_MAPS[cl]) { const m = COLUMN_MAPS[cl]; return (v) => (v === OTHER ? OTHER : m[String(v)] ?? String(v ?? "—")); }
-  const set = new Set(values.filter((v) => v != null && v !== "").map(String));
-  for (const vs of VALUE_SETS) {
-    if (set.size > 0 && [...set].every((x) => vs.keys.includes(x)) && vs.sig.some((k) => set.has(k))) {
-      const m = vs.map; return (v) => (v === OTHER ? OTHER : m[String(v)] ?? String(v ?? "—"));
-    }
-  }
-  return (v) => (v === OTHER ? OTHER : SPECIALTY[String(v)] ?? String(v ?? "—"));
-}
-const pretty = (s: string) => { const t = String(s).replace(/_/g, " ").trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
-function compact(n: number) {
-  const a = Math.abs(n);
-  if (a >= 1e7) return (n / 1e7).toFixed(1).replace(/\.0$/, "") + "Cr";
-  if (a >= 1e5) return (n / 1e5).toFixed(1).replace(/\.0$/, "") + "L";
-  if (a >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k";
-  return String(n);
-}
-function toNum(v: unknown): number | null {
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))) return Number(v);
-  return null;
-}
-const timeLike = (c: string) => /(^|_)(date|month|year|day|week|quarter|period|time|dt|admission|dob)/i.test(c || "");
 
 function CustomTooltip({ active, payload, label, fmt }: any) {
   if (!active || !payload || !payload.length) return null;
@@ -101,100 +46,23 @@ export default function ChartView({
   query?: string;
   onDrill?: (value: string, dimension: string) => void;
 }) {
-  const cols = columns && columns.length ? columns : [spec.x, ...spec.series];
+  const analysis = useMemo(() => analyze(spec, rows, columns), [spec, rows, columns]);
+  const { numericCols, groupKey, valueKey, groupDistinct, isPivot, tooManyGroups, xIsTime, scalesComparable, labelFor, fl } = analysis;
 
-  const numericCols = useMemo(
-    () => cols.filter((c) => rows.length > 0 && rows.every((r) => { const v = r[c]; return v == null || v === "" || toNum(v) !== null; }) && rows.some((r) => toNum(r[c]) !== null)),
-    [cols, rows]
+  const [measure, setMeasure] = useState<string>(analysis.defaultMeasure);
+
+  const { chartData, plotSeries, folded } = useMemo(
+    () => buildChartData(spec, rows, analysis, measure),
+    [spec, rows, analysis, measure]
   );
-  const groupKey = cols.find((c) => c !== spec.x && !numericCols.includes(c)) || null;
-  const valueKey = spec.series.find((s) => numericCols.includes(s)) || numericCols.find((c) => c !== spec.x) || spec.series[0];
-  const groupDistinct = useMemo(() => (groupKey ? new Set(rows.map((r) => String(r[groupKey] ?? "—"))).size : 0), [groupKey, rows]);
-  // Pivot into grouped series ONLY when the 2nd dimension is small enough to read.
-  const isPivot = !!groupKey && !!valueKey && numericCols.includes(valueKey) && groupDistinct >= 2 && groupDistinct <= MAX_SERIES;
-  const tooManyGroups = !!groupKey && !!valueKey && groupDistinct > MAX_SERIES;
-
-  const labelers = useMemo(() => {
-    const m: Record<string, (v: unknown) => string> = {};
-    for (const c of cols) if (!numericCols.includes(c)) m[c] = makeLabeler(c, rows.map((r) => r[c]));
-    return m;
-  }, [cols, rows, numericCols]);
-  const labelFor = (col: string, v: unknown) => (labelers[col] ? labelers[col](v) : v == null || v === "" ? "—" : String(v));
-  const fl = (v: unknown) => labelFor(spec.x, v);
-  const gl = (v: unknown) => (groupKey ? labelFor(groupKey, v) : String(v));
-
-  // Measure selector only for genuine multi-measure (no grouping) with mixed scales.
-  const scalesComparable = useMemo(() => {
-    if (groupKey || spec.series.length < 2) return true;
-    const maxes = spec.series.map((s) => Math.max(0, ...rows.map((r) => Math.abs(toNum(r[s]) || 0))));
-    const hi = Math.max(...maxes); const lo = Math.min(...maxes.filter((m) => m > 0));
-    return lo > 0 && hi / lo <= 25;
-  }, [rows, spec.series, groupKey]);
-  const [measure, setMeasure] = useState<string>(spec.series.length < 2 || scalesComparable ? "all" : spec.series[0]);
-  const activeSeries = isPivot ? [valueKey!] : groupKey ? [valueKey!] : measure === "all" ? spec.series : [measure];
-
-  const xIsTime = timeLike(spec.x);
-
-  // ---- Build clean chartData + series (sort by value desc unless time; cap + Other) ----
-  const { chartData, plotSeries, folded } = useMemo(() => {
-    const capBar = MAX_CATS_BAR;
-    if (isPivot && groupKey && valueKey) {
-      const groups = [...new Set(rows.map((r) => String(r[groupKey] ?? "—")))].slice(0, MAX_SERIES);
-      const byCat = new Map<string, Record<string, number>>();
-      for (const r of rows) {
-        const cat = String(r[spec.x] ?? "—"); const g = String(r[groupKey] ?? "—");
-        if (!byCat.has(cat)) byCat.set(cat, {});
-        byCat.get(cat)![g] = (byCat.get(cat)![g] || 0) + (toNum(r[valueKey]) || 0);
-      }
-      let out = [...byCat.entries()].map(([cat, gv]) => {
-        const o: Record<string, unknown> = { [spec.x]: cat };
-        let tot = 0; for (const g of groups) { o[g] = gv[g] || 0; tot += (gv[g] || 0); }
-        o.__t = tot; return o;
-      });
-      if (!xIsTime) out.sort((a, b) => (b.__t as number) - (a.__t as number));
-      const fold = out.length > capBar;
-      out = out.slice(0, capBar);
-      return { chartData: out, plotSeries: groups.map((g) => ({ key: g, name: gl(g) })), folded: fold ? rows.length : 0 };
-    }
-    // single dimension (or too-many-groups -> aggregate value across the group)
-    const keys = activeSeries;
-    const agg = new Map<string, Record<string, number>>();
-    for (const r of rows) {
-      const cat = String(r[spec.x] ?? "—");
-      if (!agg.has(cat)) agg.set(cat, {});
-      for (const k of keys) agg.get(cat)![k] = (agg.get(cat)![k] || 0) + (toNum(r[k]) || 0);
-    }
-    let out = [...agg.entries()].map(([cat, kv]) => {
-      const o: Record<string, unknown> = { [spec.x]: cat };
-      let tot = 0; for (const k of keys) { o[k] = kv[k] || 0; tot += (kv[k] || 0); }
-      o.__t = tot; return o;
-    });
-    if (!xIsTime) out.sort((a, b) => (b.__t as number) - (a.__t as number));
-    let foldedCount = 0;
-    if (out.length > capBar) {
-      const head = out.slice(0, capBar - 1);
-      const tail = out.slice(capBar - 1);
-      foldedCount = tail.length;
-      const other: Record<string, unknown> = { [spec.x]: OTHER };
-      for (const k of keys) other[k] = tail.reduce((s, r) => s + (Number(r[k]) || 0), 0);
-      out = [...head, other];
-    }
-    return { chartData: out, plotSeries: keys.map((s) => ({ key: s, name: pretty(s) })), folded: foldedCount };
-  }, [rows, spec, isPivot, groupKey, valueKey, activeSeries, xIsTime]); // eslint-disable-line
-
   const multi = plotSeries.length > 1;
-
-  // ---- Which chart types make sense for THIS data ----
   const catCount = chartData.length;
-  const allowed: ChartType[] = [];
-  allowed.push("bar");
-  if (xIsTime) allowed.push("line");
-  if (!multi && catCount <= MAX_CATS_PIE + 1) allowed.push("pie"); // +1 to allow with an Other slice
-  const wanted = (spec.type === "area" ? "line" : spec.type) as ChartType;
-  const [type, setType] = useState<ChartType>(
-    allowed.includes(wanted) ? wanted : xIsTime ? "line" : "bar"
-  );
+
+  const allowed = useMemo(() => allowedTypes(analysis, multi, catCount), [analysis, multi, catCount]);
+  const [type, setType] = useState<ChartType>(defaultType(spec, analysis, allowed));
   const chartType = allowed.includes(type) ? type : allowed[0];
+
+  const { horizontal, chartHeight, showLabels } = layout(spec, analysis, chartData, chartType, multi);
 
   const [view, setView] = useState<View>("chart");
 
@@ -206,14 +74,9 @@ export default function ChartView({
     if (val != null && val !== OTHER) onDrill!(fl(val), spec.drilldown!);
   };
 
-  // Horizontal bars when many/long categories (single-series only).
-  const longLabels = chartData.some((d) => fl(d[spec.x]).length > 10);
-  const horizontal = chartType === "bar" && !multi && (catCount > H_BAR_THRESHOLD || longLabels);
-  const chartHeight = horizontal ? Math.max(240, catCount * 26 + 40) : 300;
-
   const pieData = chartData.map((d) => ({ [spec.x]: d[spec.x], __v: plotSeries.reduce((s, ps) => s + (Number(d[ps.key]) || 0), 0) }));
 
-  const tableColumns = isPivot ? [spec.x, groupKey!, valueKey!] : tooManyGroups ? [spec.x, groupKey!, valueKey!] : [spec.x, ...spec.series];
+  const tableColumns = isPivot || tooManyGroups ? [spec.x, groupKey!, valueKey!] : [spec.x, ...spec.series];
   const cellFmt = (col: string, val: unknown) => {
     if (val == null || val === "") return "—";
     if (numericCols.includes(col)) { const n = toNum(val); return n !== null ? n.toLocaleString() : String(val); }
@@ -233,8 +96,6 @@ export default function ChartView({
     interval: 0, angle: 0, textAnchor: "middle", height: 30, tickMargin: 8, minTickGap: 0,
   };
 
-  // Direct value labels when there aren't too many single-series bars.
-  const showLabels = !multi && catCount <= 16;
   const renderSeries = (kind: "bar" | "line" | "area") =>
     plotSeries.map((ps, i) =>
       kind === "line" ? (
