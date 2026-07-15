@@ -157,6 +157,16 @@ def run_turn(
                           message=gen.get("message") or "I couldn't form a query for that.",
                           resolved=resolved, context_chips=chips)
 
+    # For non-English (e.g. Hindi) questions the model sometimes writes a
+    # Devanagari column alias into the SQL, which BigQuery rejects with an
+    # "Illegal input character" error. Catch it up front and regenerate ASCII SQL
+    # (the answer text stays in the user's language; only the SQL must be ASCII).
+    if not sql.isascii():
+        logger.warning("Non-ASCII SQL generated; regenerating ASCII-only SQL")
+        ascii_sql = _regen_ascii_sql(llm, system_prompt, user_prompt, sql)
+        if ascii_sql:
+            sql = ascii_sql
+
     # ---- Step 4: SQL safety ----
     v = validate_sql(sql)
     if not v.ok:
@@ -230,8 +240,10 @@ def _retry_sql(llm, system_prompt, user_prompt, bad_sql, error, role):
         + "sections and the AUTHORITATIVE COLUMN TYPES block). Common issues: a date "
         + "column named differently across tables (created_date vs date_created vs "
         + "verified_date); DATETIME columns needing DATE(col); joining hosp_id/"
-        + "service_id without stripping the `_N` suffix (see §10). Do not reference a "
-        + "column that isn't in the table you selected."
+        + "service_id without stripping the `_N` suffix (see §10); or non-ASCII "
+        + "characters in the SQL (Hindi/Devanagari in an alias — all SQL identifiers "
+        + "and aliases MUST be plain ASCII English). Do not reference a column that "
+        + "isn't in the table you selected."
     )
     try:
         gen = llm.generate_json(system_prompt, fix_prompt)
@@ -244,6 +256,28 @@ def _retry_sql(llm, system_prompt, user_prompt, bad_sql, error, role):
         return None
     result2 = get_bigquery_client().run_select(sql2)
     return (sql2, result2)
+
+
+def _regen_ascii_sql(llm, system_prompt, user_prompt, bad_sql):
+    """Regenerate SQL as pure ASCII when the model emitted non-ASCII identifiers
+    (e.g. a Devanagari alias for a Hindi question). Returns the new SQL string, or
+    None. The answer_template can stay in the user's language — only SQL must be
+    ASCII. Validation/RBAC/execution happen in the normal flow afterwards."""
+    prompt = (
+        user_prompt
+        + "\n\nYOUR PREVIOUS SQL CONTAINED NON-ASCII CHARACTERS (e.g. a Hindi/"
+        "Devanagari column alias), which BigQuery rejects. Regenerate the SAME "
+        "query with EVERY SQL keyword, table name, column name and alias in plain "
+        "ASCII English (e.g. `AS total_transactions`, never a Hindi alias). Keep "
+        "answer_template in the user's language. Return the same JSON (action=sql)."
+        f"\nPrevious SQL:\n{bad_sql}"
+    )
+    try:
+        gen = llm.generate_json(system_prompt, prompt)
+    except Exception:  # noqa: BLE001
+        return None
+    s = (gen.get("sql") or "").strip()
+    return s if (s and s.isascii()) else None
 
 
 def _build_chips(resolved: dict, session_context: dict | None) -> dict:

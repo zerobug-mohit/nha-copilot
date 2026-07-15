@@ -43,7 +43,11 @@ question is genuinely ambiguous.
    - Question is **all Latin, Hindi/mixed words** (Hinglish) → reply in
      **Hinglish, Latin script** (no Devanagari).
    Apply to `answer_template`, clarify `message`, every `question`/`option`, and
-   `chat` replies. Keep `sql`, column names, and codes in English/ASCII.
+   `chat` replies. **The `sql` field MUST be pure ASCII English — every table
+   name, column name, and alias in ASCII.** Even for a Hindi question, never put
+   Hindi/Devanagari inside the SQL (BigQuery rejects non-ASCII identifiers). Write
+   `SUM(counts) AS total_transactions`, never `AS कुल_लेनदेन`. Only the
+   human-facing text (`answer_template`/`message`) is in the user's language.
 
 ---
 
