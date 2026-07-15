@@ -58,41 +58,45 @@ def ocr_document(
 
     import pypdfium2 as pdfium
     import pytesseract
+    from concurrent.futures import ThreadPoolExecutor
     from pytesseract import Output
 
     dpi = dpi or get_settings().ocr_dpi
     scale = dpi / 72.0
     out: dict[int, list[LineBox]] = {}
+    workers = min(4, (os.cpu_count() or 2))
 
-    # Render sequentially (pypdfium2 isn't safe for concurrent access to one doc),
-    # then OCR in parallel — Tesseract runs as a subprocess and releases the GIL,
-    # so this is a big speed-up on multi-core for large scanned PDFs.
-    images: dict[int, "object"] = {}
-    pdf = pdfium.PdfDocument(data)
-    try:
-        for idx in page_indices:
-            try:
-                images[idx] = pdf[idx].render(scale=scale).to_pil()
-            except Exception:  # noqa: BLE001
-                logger.warning("Render failed on page %d", idx, exc_info=True)
-    finally:
-        pdf.close()
-
-    def _ocr_one(idx: int) -> tuple[int, list[LineBox]]:
+    def _ocr_image(item):
+        idx, img = item
         try:
-            img = images[idx]
             d = pytesseract.image_to_data(img, output_type=Output.DICT)
             return idx, _lines_from_tsv(d, float(img.width), float(img.height))
         except Exception:  # noqa: BLE001 - one bad page shouldn't kill ingestion
             logger.warning("OCR failed on page %d", idx, exc_info=True)
             return idx, []
 
-    from concurrent.futures import ThreadPoolExecutor
-
-    workers = min(8, (os.cpu_count() or 2))
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        for idx, lines in ex.map(_ocr_one, list(images.keys())):
-            out[idx] = lines
+    # Process in small batches: render a handful of pages (sequential — pypdfium2
+    # isn't safe for concurrent access to one doc), OCR them in parallel, then free
+    # the images before the next batch. Bounds memory so a big scanned PDF (dozens
+    # of high-DPI page images) never exhausts RAM.
+    BATCH = workers
+    pdf = pdfium.PdfDocument(data)
+    try:
+        for start in range(0, len(page_indices), BATCH):
+            batch = page_indices[start : start + BATCH]
+            images: list[tuple[int, "object"]] = []
+            for idx in batch:
+                try:
+                    images.append((idx, pdf[idx].render(scale=scale).to_pil()))
+                except Exception:  # noqa: BLE001
+                    logger.warning("Render failed on page %d", idx, exc_info=True)
+                    out[idx] = []
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                for idx, lines in ex.map(_ocr_image, images):
+                    out[idx] = lines
+            images.clear()
+    finally:
+        pdf.close()
     return out
 
 
