@@ -1,0 +1,90 @@
+"""PDF source abstraction.
+
+The rest of Chat-with-PDFs depends only on `PdfSource`, so the corpus can come
+from a local folder now and from Google Drive later without touching ingestion,
+indexing, or the API. A Drive-backed source only needs to implement the same
+three methods (list ids, get bytes, a fingerprint for cache invalidation).
+"""
+from __future__ import annotations
+
+import hashlib
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import Path
+
+from app.config import get_settings
+
+
+@dataclass
+class PdfRef:
+    id: str          # stable id used in URLs and citations
+    name: str        # display name
+    fingerprint: str  # changes when the file content changes (for cache invalidation)
+
+
+class PdfSource(ABC):
+    @abstractmethod
+    def list_pdfs(self) -> list[PdfRef]:
+        ...
+
+    @abstractmethod
+    def read_bytes(self, pdf_id: str) -> bytes:
+        ...
+
+    def corpus_fingerprint(self) -> str:
+        """A single hash over the whole corpus — the index is rebuilt when it changes."""
+        h = hashlib.sha256()
+        for ref in sorted(self.list_pdfs(), key=lambda r: r.id):
+            h.update(ref.id.encode())
+            h.update(ref.fingerprint.encode())
+        return h.hexdigest()[:16]
+
+
+class LocalFolderSource(PdfSource):
+    """PDFs from a local folder (config: PDF_DIR). id = filename stem-safe slug."""
+
+    def __init__(self, folder: Path | None = None) -> None:
+        self.folder = folder or get_settings().pdf_dir_path
+
+    def _by_id(self) -> dict[str, Path]:
+        out: dict[str, Path] = {}
+        if not self.folder.exists():
+            return out
+        for p in sorted(self.folder.glob("*.pdf")):
+            out[self._slug(p.name)] = p
+        return out
+
+    @staticmethod
+    def _slug(name: str) -> str:
+        stem = Path(name).stem
+        return "".join(c if (c.isalnum() or c in "-_") else "-" for c in stem).strip("-").lower() or "doc"
+
+    def list_pdfs(self) -> list[PdfRef]:
+        refs: list[PdfRef] = []
+        for pid, path in self._by_id().items():
+            st = path.stat()
+            fp = f"{st.st_size}:{int(st.st_mtime)}"
+            refs.append(PdfRef(id=pid, name=path.name, fingerprint=fp))
+        return refs
+
+    def read_bytes(self, pdf_id: str) -> bytes:
+        path = self._by_id().get(pdf_id)
+        if not path:
+            raise FileNotFoundError(f"No PDF with id {pdf_id!r}")
+        return path.read_bytes()
+
+
+_source: PdfSource | None = None
+
+
+def get_pdf_source() -> PdfSource:
+    global _source
+    if _source is None:
+        _source = LocalFolderSource()
+    return _source
+
+
+def set_pdf_source(source: PdfSource) -> None:
+    """Swap the source (e.g. a Google Drive source) without touching the rest."""
+    global _source
+    _source = source

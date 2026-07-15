@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1"
+    openai_embedding_model: str = "text-embedding-3-small"
     # A (typically stronger) model for the Explorer's idea generation. Falls back
     # to openai_model when unset. e.g. "gpt-4.1" or a reasoning model.
     openai_explorer_model: str = ""
@@ -64,6 +65,11 @@ class Settings(BaseSettings):
     # Folder holding lgd_master.xlsx (geography). Bundled in backend/reference
     # so a fresh clone is self-contained. Resolved relative to backend/.
     reference_data_dir: str = "reference"
+    # Chat-with-PDFs: folder of source PDFs (local source; a Google Drive source
+    # can be swapped in behind the same interface). Resolved relative to backend/.
+    pdf_dir: str = "pdfs"
+    # Where the built PDF index (chunks + embeddings) is cached.
+    pdf_index_dir: str = "pdf_index"
 
     # ----- derived helpers -----
     @property
@@ -76,6 +82,18 @@ class Settings(BaseSettings):
         if not p.is_absolute():
             p = (BACKEND_DIR / p).resolve()
         return p
+
+    def _resolve(self, raw: str) -> Path:
+        p = Path(raw)
+        return p if p.is_absolute() else (BACKEND_DIR / p).resolve()
+
+    @property
+    def pdf_dir_path(self) -> Path:
+        return self._resolve(self.pdf_dir)
+
+    @property
+    def pdf_index_path(self) -> Path:
+        return self._resolve(self.pdf_index_dir)
 
     # Maps the CLAUDE.md placeholder keys to the configured table names. The keys
     # here match the {..._TABLE} placeholders substituted in prompt_builder.
