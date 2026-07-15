@@ -80,8 +80,9 @@ def ocr_document(
 
     def _ocr_one(idx: int) -> tuple[int, list[LineBox]]:
         try:
-            d = pytesseract.image_to_data(images[idx], output_type=Output.DICT)
-            return idx, _lines_from_tsv(d, scale)
+            img = images[idx]
+            d = pytesseract.image_to_data(img, output_type=Output.DICT)
+            return idx, _lines_from_tsv(d, float(img.width), float(img.height))
         except Exception:  # noqa: BLE001 - one bad page shouldn't kill ingestion
             logger.warning("OCR failed on page %d", idx, exc_info=True)
             return idx, []
@@ -95,8 +96,9 @@ def ocr_document(
     return out
 
 
-def _lines_from_tsv(d: dict, scale: float) -> list[LineBox]:
-    """Group Tesseract word boxes (pixels) into lines, converting to PDF points."""
+def _lines_from_tsv(d: dict, img_w: float, img_h: float) -> list[LineBox]:
+    """Group Tesseract word boxes (pixels) into lines, normalized to page fractions
+    (0..1) so they align to the rendered page regardless of point-space quirks."""
     n = len(d["text"])
     groups: dict[tuple, dict] = {}
     for i in range(n):
@@ -125,10 +127,10 @@ def _lines_from_tsv(d: dict, scale: float) -> list[LineBox]:
         lines.append(
             LineBox(
                 text=text,
-                x0=g["x0"] / scale,
-                top=g["top"] / scale,
-                x1=g["x1"] / scale,
-                bottom=g["bottom"] / scale,
+                x0=g["x0"] / img_w,
+                top=g["top"] / img_h,
+                x1=g["x1"] / img_w,
+                bottom=g["bottom"] / img_h,
             )
         )
     return lines

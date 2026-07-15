@@ -219,7 +219,6 @@ export default function PdfChat({ token }: { token: string }) {
           docName={active?.docName}
           targetPage={active?.page ?? 1}
           highlights={active?.highlights ?? []}
-          pageWidthPts={active?.pageWidthPts ?? 612}
         />
       </div>
     </div>

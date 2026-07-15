@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 _store: VectorStore | None = None
 TOP_K = 8
+# Bump when the chunk/box format changes so the on-disk cache is rebuilt.
+INDEX_VERSION = 2
 
 _SYSTEM = (
     "You answer questions using ONLY the numbered SOURCES provided (excerpts from "
@@ -43,7 +45,7 @@ def _index_path():
 
 def _fingerprint(src) -> str:
     s = get_settings()
-    return f"{src.corpus_fingerprint()}|{s.openai_embedding_model}"
+    return f"v{INDEX_VERSION}|{src.corpus_fingerprint()}|{s.openai_embedding_model}"
 
 
 def get_index(force: bool = False) -> VectorStore:

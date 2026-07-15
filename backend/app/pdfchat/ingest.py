@@ -1,12 +1,13 @@
 """PDF ingestion: extract per-line text with bounding boxes, then chunk.
 
-Uses pdfplumber. Coordinates are in PDF points with a TOP-LEFT origin (pdfplumber's
-`top`/`bottom`), which maps directly to a pdf.js CSS overlay after scaling — so the
-frontend can draw a highlight box over the exact cited line(s).
+Uses pdfplumber for the text layer, falling back to OCR (ocr.py) for scanned pages.
+All box coordinates are stored as **page fractions (0..1)** with a top-left origin —
+NOT points. Fractions are invariant to point-space quirks (some PDFs report a
+different page width across libraries), so a fraction × the rendered page size in
+the viewer lands the highlight on the exact cited line every time.
 
-Each chunk carries: the source pdf, 1-based page, page width/height (points), the
-joined text, and the list of line boxes it spans — enough to render an exact-line
-highlight and to jump the viewer to the right page.
+Each chunk carries: the source pdf, 1-based page, page width/height (points, for
+reference only), the joined text, and the list of fractional line boxes it spans.
 """
 from __future__ import annotations
 
@@ -113,7 +114,13 @@ def extract_chunks(pdf_id: str, pdf_name: str, data: bytes) -> list[Chunk]:
             page_dims.append((w, h))
             page_meta[i] = {"width": w, "height": h}
             try:
-                lines = [l for l in _page_lines(page) if l.text]
+                # Normalize pdfplumber's absolute points to page fractions (0..1)
+                # so boxes align to the rendered page regardless of point-space.
+                lines = [
+                    LineBox(l.text, l.x0 / w, l.top / h, l.x1 / w, l.bottom / h)
+                    for l in _page_lines(page)
+                    if l.text
+                ]
             except Exception:  # noqa: BLE001 - never let one bad page kill ingestion
                 logger.warning("Line extraction failed on %s p%d", pdf_name, i + 1, exc_info=True)
                 lines = []
