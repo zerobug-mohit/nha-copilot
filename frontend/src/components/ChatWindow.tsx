@@ -116,8 +116,8 @@ export default function ChatWindow({
         </div>
         <div className="flex overflow-hidden rounded-full border border-line text-[13px]">
           {([
-            { key: "chat", label: "Chat" },
-            { key: "explorer", label: "Explorer" },
+            { key: "chat", label: "Chat with Data" },
+            { key: "explorer", label: "Data Explorer" },
             { key: "pdfs", label: "Chat with PDFs" },
           ] as const).map((t) => (
             <button
