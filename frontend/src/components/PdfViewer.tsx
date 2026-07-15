@@ -24,8 +24,8 @@ export default function PdfViewer({
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(targetPage || 1);
   const [width, setWidth] = useState(600);
-  // Actual rendered page size (CSS px) — highlights are fraction × these.
-  const [rendered, setRendered] = useState<{ w: number; h: number } | null>(null);
+  // Page intrinsic aspect (height/width); rendered size = width × [1, aspect].
+  const [aspect, setAspect] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hlRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +50,9 @@ export default function PdfViewer({
     return () => clearTimeout(t);
   }, [page, blobUrl, highlights]);
 
-  const onCited = page === targetPage && highlights.length > 0 && !!rendered;
+  const onCited = page === targetPage && highlights.length > 0 && aspect > 0;
+  const rw = width;
+  const rh = width * aspect;
 
   if (!blobUrl) {
     return (
@@ -94,10 +96,12 @@ export default function PdfViewer({
               width={width}
               renderTextLayer={false}
               renderAnnotationLayer={false}
-              onRenderSuccess={(p: any) => setRendered({ w: p.width, h: p.height })}
+              onLoadSuccess={(p: any) => {
+                if (p?.originalWidth) setAspect(p.originalHeight / p.originalWidth);
+              }}
               loading={<div className="p-6 text-sm text-ink-faint">Rendering page…</div>}
             />
-            {onCited && rendered && (
+            {onCited && (
               <div className="pointer-events-none absolute inset-0">
                 {highlights.map((b, i) => (
                   <div
@@ -105,10 +109,10 @@ export default function PdfViewer({
                     ref={i === 0 ? hlRef : undefined}
                     className="absolute rounded-sm"
                     style={{
-                      left: b.x0 * rendered.w - 2,
-                      top: b.top * rendered.h - 1,
-                      width: (b.x1 - b.x0) * rendered.w + 4,
-                      height: (b.bottom - b.top) * rendered.h + 2,
+                      left: b.x0 * rw - 2,
+                      top: b.top * rh - 1,
+                      width: (b.x1 - b.x0) * rw + 4,
+                      height: (b.bottom - b.top) * rh + 2,
                       background: "rgba(237, 200, 40, 0.32)",
                       boxShadow: "0 0 0 1px rgba(200, 150, 0, 0.55)",
                     }}
