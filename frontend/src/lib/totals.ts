@@ -43,9 +43,14 @@ export function columnTotals(
   return out;
 }
 
-/** Format a total for display (whole numbers plain, decimals to 2 dp). */
-export function formatTotal(n: number): string {
+/** Format a number for display: whole numbers plain, decimals capped to 2 dp,
+ * with thousands separators. Used for table cells, tooltips, and totals so no
+ * raw float like 22.366906474… ever reaches the UI. */
+export function fmtNum(n: number): string {
   return Number.isInteger(n)
     ? n.toLocaleString()
     : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
+
+/** Format a total for display (alias of fmtNum, kept for call sites). */
+export const formatTotal = fmtNum;

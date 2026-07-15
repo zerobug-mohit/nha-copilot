@@ -227,6 +227,12 @@ describe("compact number formatting (currency in Cr/L/k)", () => {
     expect(compact(14_904_000)).toBe("1.5Cr");
     expect(compact(20_000_000)).toBe("2Cr"); // trailing .0 stripped
   });
+  it("rounds long decimals (averages/ratios) instead of dumping raw floats", () => {
+    expect(compact(22.366906474)).toBe("22.4"); // was "22.366906474..."
+    expect(compact(2.6747474747)).toBe("2.7");
+    expect(compact(0.056789)).toBe("0.06"); // <1 keeps 2 dp
+    expect(compact(999.9)).toBe("999.9");
+  });
 });
 
 describe("value humanization by column / value-set", () => {

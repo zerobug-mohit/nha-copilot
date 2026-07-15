@@ -67,7 +67,9 @@ export function compact(n: number): string {
   if (a >= 1e7) return (n / 1e7).toFixed(1).replace(/\.0$/, "") + "Cr";
   if (a >= 1e5) return (n / 1e5).toFixed(1).replace(/\.0$/, "") + "L";
   if (a >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k";
-  return String(n);
+  if (Number.isInteger(n)) return String(n);
+  // Non-integer under 1000 (averages, ratios): keep it short — 2 dp below 1, else 1 dp.
+  return n.toFixed(a < 1 ? 2 : 1);
 }
 
 export function toNum(v: unknown): number | null {

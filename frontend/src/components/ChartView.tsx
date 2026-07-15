@@ -6,7 +6,7 @@ import {
 import type { ChartSpec } from "../api";
 import { exportToExcel } from "../lib/exportExcel";
 import { exportChartToPptx } from "../lib/exportPptx";
-import { columnTotals, formatTotal } from "../lib/totals";
+import { columnTotals, formatTotal, fmtNum } from "../lib/totals";
 import {
   analyze, buildChartData, allowedTypes, defaultType, layout,
   compact, pretty, toNum, MAX_CATS_BAR, OTHER, type ChartType,
@@ -29,7 +29,7 @@ function CustomTooltip({ active, payload, label, fmt }: any) {
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color || p.payload?.fill }} />
           <span className="text-ink-muted">{p.name}:</span>
           <span className="font-medium tabular-nums text-ink">
-            {typeof p.value === "number" ? p.value.toLocaleString() : String(p.value)}
+            {typeof p.value === "number" ? fmtNum(p.value) : String(p.value)}
           </span>
         </div>
       ))}
@@ -79,7 +79,7 @@ export default function ChartView({
   const tableColumns = isPivot || tooManyGroups ? [spec.x, groupKey!, valueKey!] : [spec.x, ...spec.series];
   const cellFmt = (col: string, val: unknown) => {
     if (val == null || val === "") return "—";
-    if (numericCols.includes(col)) { const n = toNum(val); return n !== null ? n.toLocaleString() : String(val); }
+    if (numericCols.includes(col)) { const n = toNum(val); return n !== null ? fmtNum(n) : String(val); }
     return labelFor(col, val);
   };
 

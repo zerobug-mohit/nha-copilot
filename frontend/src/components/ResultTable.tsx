@@ -1,5 +1,5 @@
 import { exportToExcel } from "../lib/exportExcel";
-import { columnTotals, formatTotal } from "../lib/totals";
+import { columnTotals, formatTotal, fmtNum } from "../lib/totals";
 
 export default function ResultTable({
   columns,
@@ -76,6 +76,6 @@ export default function ResultTable({
 
 function formatCell(v: unknown): string {
   if (v === null || v === undefined) return "—";
-  if (typeof v === "number") return v.toLocaleString();
+  if (typeof v === "number") return fmtNum(v);
   return String(v);
 }
