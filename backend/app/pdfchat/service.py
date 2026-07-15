@@ -143,18 +143,31 @@ def answer(question: str) -> dict[str, Any]:
     answer_text = str(out.get("answer") or "").strip()
     found = bool(out.get("found", True))
 
-    # Map the [n] markers actually used in the answer back to their source chunks.
-    used = []
-    seen: set[int] = set()
+    # The [n] markers hold the SOURCE's retrieval rank (1..K). Renumber them to
+    # sequential display numbers (1, 2, 3…) in order of first appearance, so a
+    # single-source answer shows [1] rather than e.g. [4]. Rewrite the markers in
+    # the answer text to match, and drop any that reference a non-existent source.
+    display_no: dict[int, int] = {}
+    order: list[int] = []
     for m in _CITE_RE.finditer(answer_text):
         n = int(m.group(1))
-        if n in seen or n < 1 or n > len(hits):
+        if n < 1 or n > len(hits) or n in display_no:
             continue
-        seen.add(n)
-        chunk, score = hits[n - 1]
+        display_no[n] = len(order) + 1
+        order.append(n)
+
+    def _renumber(m):
+        n = int(m.group(1))
+        return f"[{display_no[n]}]" if n in display_no else ""
+
+    answer_text = _CITE_RE.sub(_renumber, answer_text).strip()
+
+    used = []
+    for old_n in order:
+        chunk, score = hits[old_n - 1]
         snippet = chunk["text"]
         used.append({
-            "n": n,
+            "n": display_no[old_n],
             "pdf_id": chunk["pdf_id"],
             "pdf_name": chunk["pdf_name"],
             "page": chunk["page"],
