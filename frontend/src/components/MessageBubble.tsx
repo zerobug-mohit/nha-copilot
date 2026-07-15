@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { ChatResponse } from "../api";
 import Avatar from "./Avatar";
 import ChartView from "./ChartView";
-import ContextChips from "./ContextChips";
 import ResultTable from "./ResultTable";
 import SqlViewer from "./SqlViewer";
 
@@ -124,7 +123,6 @@ export default function MessageBubble({
     <div className="flex justify-start gap-2 animate-in">
       <Avatar />
       <div className={`w-full max-w-[85%] rounded-lg rounded-tl-sm border px-4 py-3 shadow-soft ${tone}`}>
-        {data?.context_chips && <ContextChips chips={data.context_chips} />}
         {badge && (
           <span className={`mb-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badge.cls}`}>
             {badge.label}
