@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     pdf_dir: str = "pdfs"
     # Where the built PDF index (chunks + embeddings) is cached.
     pdf_index_dir: str = "pdf_index"
+    # OCR (for scanned/image PDFs with no text layer). Tesseract binary path — if
+    # empty, common locations + PATH are auto-detected. ocr_dpi trades speed vs
+    # accuracy when rendering pages for OCR.
+    tesseract_cmd: str = ""
+    ocr_dpi: int = 220
 
     # ----- derived helpers -----
     @property

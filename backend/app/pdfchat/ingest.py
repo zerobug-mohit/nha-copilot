@@ -95,45 +95,72 @@ def _union(lines: list[LineBox]) -> dict[str, float]:
 
 
 def extract_chunks(pdf_id: str, pdf_name: str, data: bytes) -> list[Chunk]:
-    """Extract chunks (with line boxes) from a PDF's bytes."""
+    """Extract chunks (with line boxes) from a PDF's bytes.
+
+    Two-pass: use the embedded text layer where present; for scanned/image pages
+    (no extractable text) fall back to OCR so scanned PDFs are searchable too.
+    """
     import pdfplumber
 
-    chunks: list[Chunk] = []
+    lines_by_page: dict[int, list[LineBox]] = {}   # 0-based page index -> lines
+    page_meta: dict[int, dict] = {}                # 0-based -> {width, height}
+    need_ocr: list[int] = []
+
     with pdfplumber.open(io.BytesIO(data)) as pdf:
-        for pno, page in enumerate(pdf.pages, start=1):
+        page_dims: list[tuple[float, float]] = []
+        for i, page in enumerate(pdf.pages):
+            w, h = float(page.width), float(page.height)
+            page_dims.append((w, h))
+            page_meta[i] = {"width": w, "height": h}
             try:
-                lines = _page_lines(page)
+                lines = [l for l in _page_lines(page) if l.text]
             except Exception:  # noqa: BLE001 - never let one bad page kill ingestion
-                logger.warning("Line extraction failed on %s p%d", pdf_name, pno, exc_info=True)
+                logger.warning("Line extraction failed on %s p%d", pdf_name, i + 1, exc_info=True)
+                lines = []
+            if lines:
+                lines_by_page[i] = lines
+            else:
+                need_ocr.append(i)
+
+    if need_ocr:
+        from app.pdfchat.ocr import ocr_document
+
+        logger.info("%s: OCR needed for %d page(s)", pdf_name, len(need_ocr))
+        lines_by_page.update(ocr_document(data, need_ocr, page_dims))
+
+    chunks: list[Chunk] = []
+    for i in sorted(lines_by_page):
+        pno = i + 1
+        lines = lines_by_page[i]
+        pw = page_meta[i]["width"]
+        ph = page_meta[i]["height"]
+        j = 0
+        while j < len(lines):
+            group: list[LineBox] = []
+            chars = 0
+            start = j
+            while j < len(lines) and len(group) < MAX_CHUNK_LINES and (
+                chars + len(lines[j].text) <= MAX_CHUNK_CHARS or not group
+            ):
+                group.append(lines[j])
+                chars += len(lines[j].text) + 1
+                j += 1
+            text = " ".join(l.text for l in group).strip()
+            if not text:
                 continue
-            lines = [l for l in lines if l.text]
-            i = 0
-            while i < len(lines):
-                group: list[LineBox] = []
-                chars = 0
-                start = i
-                while i < len(lines) and len(group) < MAX_CHUNK_LINES and (
-                    chars + len(lines[i].text) <= MAX_CHUNK_CHARS or not group
-                ):
-                    group.append(lines[i])
-                    chars += len(lines[i].text) + 1
-                    i += 1
-                text = " ".join(l.text for l in group).strip()
-                if not text:
-                    continue
-                chunks.append(
-                    Chunk(
-                        chunk_id=f"{pdf_id}:{pno}:{start}",
-                        pdf_id=pdf_id,
-                        pdf_name=pdf_name,
-                        page=pno,
-                        page_width=float(page.width),
-                        page_height=float(page.height),
-                        line_start=start,
-                        line_end=i - 1,
-                        text=text,
-                        bbox=_union(group),
-                        lines=[asdict(l) for l in group],
-                    )
+            chunks.append(
+                Chunk(
+                    chunk_id=f"{pdf_id}:{pno}:{start}",
+                    pdf_id=pdf_id,
+                    pdf_name=pdf_name,
+                    page=pno,
+                    page_width=pw,
+                    page_height=ph,
+                    line_start=start,
+                    line_end=j - 1,
+                    text=text,
+                    bbox=_union(group),
+                    lines=[asdict(l) for l in group],
                 )
+            )
     return chunks
