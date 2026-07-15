@@ -53,6 +53,24 @@ There is **no pre-built merged table** in this dataset (unlike some other NHA
 tools) — tables connect to each other through a shared **facility ID** and/or
 shared **geography columns**. See §10 for exactly how to join them.
 
+> **DATA COVERAGE — READ THIS (critical).** The loaded **activity/fact tables**
+> (`{FACILITY_REGISTRY_TABLE}`, `{PROFESSIONALS_REGISTRY_TABLE}`,
+> `{TOP_INDICATORS_TABLE}`, `{LINKED_TREND_TABLE}`, `{LINKED_FACILITY_TABLE}`,
+> `{SCAN_SHARE_TABLE}`, `{SCAN_PAY_TABLE}`) contain data for **only two states:
+> Bihar (`state_code` 10) and Andhra Pradesh (`state_code` 28)**. No other state
+> has any data. **NEVER assume, invent, name, or filter by any other state**
+> (e.g. Uttar Pradesh, Gujarat, Maharashtra) unless the user explicitly names it —
+> and if they name one that isn't Bihar or Andhra Pradesh, answer honestly that
+> the current dataset only covers those two states (do not fabricate a figure).
+> When the user gives **no** geography, do **not** invent one and do **not**
+> mention a specific state in `answer_template` — just aggregate across the data
+> (which is these two states) and say so if relevant.
+> **Caveat:** `{STATE_DISTRICT_MASTER_TABLE}` is a **full-India lookup** listing
+> all ~36 states/UTs and ~780 districts — its presence does NOT mean those places
+> have activity data. Use it only to translate `state_code`/`district_code` ↔
+> names for the two covered states; never read the master's other state names as
+> evidence of coverage.
+
 | Table | Grain | Use it for |
 |---|---|---|
 | `{FACILITY_REGISTRY_TABLE}` | one row per **facility registration record** | facility profile: type, ownership, registration/verification status, address |
@@ -62,7 +80,7 @@ shared **geography columns**. See §10 for exactly how to join them.
 | `{LINKED_FACILITY_TABLE}` | one row per **facility-bridge link** | which facilities are linked to which bridge (DSC/HMIS software), and whether that link is active |
 | `{SCAN_SHARE_TABLE}` | one row per **facility per day** | Scan & Share transaction counts (patient scans a QR to share health records) |
 | `{SCAN_PAY_TABLE}` | one row per **scan-and-pay transaction batch** | Scan & Pay transaction counts and payment amounts/status |
-| `{STATE_DISTRICT_MASTER_TABLE}` | one row per **district** | lookup only: state/district code ↔ name ↔ estimated population |
+| `{STATE_DISTRICT_MASTER_TABLE}` | one row per **district** (FULL India — all ~36 states, NOT just the two with data) | lookup only: state/district code ↔ name ↔ estimated population |
 | `{BRIDGE_INTEGRATOR_TABLE}` | one row per **bridge/DSC (integrator)** | bridge/software vendor reference: production vs. sandbox status, milestone, ownership |
 
 **Decision rule:**
@@ -429,8 +447,10 @@ Terms that almost always need clarification in this domain:
 - **Ambiguous geography** — same district name/code pattern across states.
 
 **Answer directly, without asking**, when the question names a concrete
-metric and dimension with an obvious default: geography not given → all
-selected states in the demo dataset; period not given → full data window;
+metric and dimension with an obvious default: geography not given → aggregate
+across the covered data (Bihar + Andhra Pradesh only — do NOT name or filter to
+any single state, and never mention Uttar Pradesh/Gujarat/etc.); period not
+given → full data window;
 "how many facilities registered" → `COUNT(DISTINCT hfr_id)`; "how many Scan
 & Share transactions" → `SUM(counts)`; "how many Scan & Pay transactions" →
 `SUM(facility_count)`; "total payment amount" → `SUM(payment_amount)`.
@@ -455,8 +475,10 @@ receives this document next:
 4. ✅ **Date ranges** — confirmed per table (§10).
 5. ✅ **BigQuery column types** — explicit schema specified, autodetect not
    relied upon (§11).
-6. ✅ **The two-state demo sample is a sampling choice, not a data-absence
-   pattern** — already stated correctly throughout; nothing to change.
+6. ✅ **The two states with data are Bihar (10) and Andhra Pradesh (28)** — a
+   sampling choice, not data-absence. See the DATA COVERAGE box in §1: never
+   assume/invent any other state; the master table's full-India list is a lookup,
+   not coverage.
 
 One small residual note, narrower than a full open question: the `hip_id`/
 `service_id` suffix-stripping agreement was directly verified in
