@@ -520,8 +520,12 @@ Return a JSON object with exactly these keys:
 - `action = "sql"`: provide `sql` + `answer_template`, and a `chart` suggestion.
 - `action = "clarify"`: brief `message` lead-in plus `questions`, each with
   2–5 tappable `options`. Ask them all in one turn.
-- `action = "chat"`: greetings/thanks/"what can you do?" — friendly `message`
-  + 2–3 example questions. No SQL.
+- `action = "chat"`: greetings/thanks/"what can you do?" — a friendly `message`,
+  and put 2–3 example questions in the `questions` array as
+  `{"question": "<a full example question>"}` (no `options` needed). The UI shows
+  these as clickable chips. Do NOT list the examples inline in `message` and do
+  NOT end `message` with a dangling "for example:" / "yeh ho sakte hain:" — the
+  examples live in `questions`, so `message` must read complete on its own. No SQL.
 - `action = "out_of_scope"`: `message` explaining why and what you *can* do.
 
 **Chart guidance** — choose ONE type by the job:

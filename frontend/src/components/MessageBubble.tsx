@@ -119,6 +119,15 @@ export default function MessageBubble({
       ? { label: "Out of scope", cls: "bg-gold/10 text-gold" }
       : null;
 
+  // Example questions to offer for a "chat" reply — from options or question texts.
+  const chatExamples =
+    action === "chat"
+      ? (data?.options && data.options.length
+          ? data.options
+          : (data?.questions || []).map((q) => q.question)
+        ).filter(Boolean).slice(0, 4)
+      : [];
+
   return (
     <div className="flex justify-start gap-2 animate-in">
       <Avatar />
@@ -148,6 +157,22 @@ export default function MessageBubble({
               ))}
             </div>
           ) : null
+        )}
+        {action === "chat" && onQuickReply && chatExamples.length > 0 && (
+          <div className="mt-2.5">
+            <div className="mb-1 text-[11px] font-medium text-ink-faint">Try asking:</div>
+            <div className="flex flex-wrap gap-1.5">
+              {chatExamples.map((ex) => (
+                <button
+                  key={ex}
+                  onClick={() => onQuickReply(ex)}
+                  className="rounded-full border border-brand/40 bg-brand-light px-3 py-1 text-left text-[12px] font-medium text-brand-dark transition hover:bg-brand hover:text-white"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {data?.chart && data.rows && data.rows.length > 1 ? (
           <ChartView spec={data.chart} rows={data.rows} columns={data.columns} query={query} onDrill={onDrill} />

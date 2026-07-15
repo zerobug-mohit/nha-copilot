@@ -132,7 +132,7 @@ def run_turn(
     action = gen.get("action", "sql")
     chips = _build_chips(resolved, session_context)
 
-    if action == "clarify":
+    if action in ("clarify", "chat"):
         raw_opts = gen.get("options") or []
         opts = [str(o).strip() for o in raw_opts if str(o).strip()][:5]
         questions = []
@@ -140,14 +140,18 @@ def run_turn(
             if isinstance(q, dict) and str(q.get("question") or "").strip():
                 q_opts = [str(o).strip() for o in (q.get("options") or []) if str(o).strip()][:6]
                 questions.append({"question": str(q["question"]).strip(), "options": q_opts})
-        return TurnResult(action="clarify", message=gen.get("message"),
+            elif isinstance(q, str) and q.strip():
+                # chat examples may come as bare strings
+                questions.append({"question": q.strip(), "options": []})
+        # chat examples may also arrive under an "examples" key
+        for ex in gen.get("examples") or []:
+            if isinstance(ex, str) and ex.strip():
+                questions.append({"question": ex.strip(), "options": []})
+        return TurnResult(action=action, message=gen.get("message"),
                           options=opts, questions=questions,
                           resolved=resolved, context_chips=chips)
     if action == "out_of_scope":
         return TurnResult(action="out_of_scope", message=gen.get("message"),
-                          resolved=resolved, context_chips=chips)
-    if action == "chat":
-        return TurnResult(action="chat", message=gen.get("message"),
                           resolved=resolved, context_chips=chips)
 
     sql = (gen.get("sql") or "").strip()
