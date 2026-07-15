@@ -8,6 +8,7 @@ highlight the exact cited line(s).
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 _store: VectorStore | None = None
 TOP_K = 8
 # Bump when the chunk/box format changes so the on-disk cache is rebuilt.
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 
 _SYSTEM = (
     "You answer questions using ONLY the numbered SOURCES provided (excerpts from "
@@ -39,8 +40,9 @@ _SYSTEM = (
 )
 
 
-def _index_path():
-    return get_settings().pdf_index_path / "index.json"
+def _cache_path():
+    # Per-PDF cache so adding/removing one PDF only re-processes that PDF.
+    return get_settings().pdf_index_path / "pdfs.json"
 
 
 def _fingerprint(src) -> str:
@@ -48,8 +50,28 @@ def _fingerprint(src) -> str:
     return f"v{INDEX_VERSION}|{src.corpus_fingerprint()}|{s.openai_embedding_model}"
 
 
+def _load_pdf_cache() -> dict[str, Any]:
+    p = _cache_path()
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - corrupt cache -> rebuild
+        return {}
+
+
+def _save_pdf_cache(data: dict[str, Any]) -> None:
+    p = _cache_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(data), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        logger.warning("Could not write PDF cache", exc_info=True)
+
+
 def get_index(force: bool = False) -> VectorStore:
-    """Load the cached index if current, else (re)build and cache it."""
+    """Return the current index, incrementally (re)building only PDFs that are new,
+    changed, or removed since the last build. Cheap when nothing changed."""
     global _store
     src = get_pdf_source()
     want_fp = _fingerprint(src)
@@ -57,38 +79,53 @@ def get_index(force: bool = False) -> VectorStore:
     if not force and _store is not None and _store.meta.get("fingerprint") == want_fp:
         return _store
 
-    if not force:
-        cached = VectorStore.load(_index_path())
-        if cached and cached.meta.get("fingerprint") == want_fp:
-            _store = cached
-            return _store
-
-    _store = _build(src, want_fp)
+    _store = _build_incremental(src, want_fp, force)
     return _store
 
 
-def _build(src, fingerprint: str) -> VectorStore:
+def _build_incremental(src, want_fp: str, force: bool) -> VectorStore:
+    s = get_settings()
     llm = get_llm_client()
-    all_chunks: list[dict[str, Any]] = []
-    for ref in src.list_pdfs():
-        try:
-            data = src.read_bytes(ref.id)
-            chunks = extract_chunks(ref.id, ref.name, data)
-            all_chunks.extend(c.to_dict() for c in chunks)
-            logger.info("Ingested %s: %d chunks", ref.name, len(chunks))
-        except Exception:  # noqa: BLE001
-            logger.warning("Failed to ingest %s", ref.name, exc_info=True)
+    cached = {} if force else _load_pdf_cache()
+    # If the embedding model changed, everything must be re-embedded.
+    prev_pdfs: dict[str, Any] = {}
+    if cached.get("embedding_model") == s.openai_embedding_model:
+        prev_pdfs = cached.get("pdfs", {})
 
-    embeddings: list[list[float]] = []
-    if all_chunks:
-        embeddings = llm.embed([c["text"] for c in all_chunks])
-
-    store = VectorStore(chunks=all_chunks, embeddings=embeddings, meta={"fingerprint": fingerprint})
     try:
-        store.save(_index_path())
-    except Exception:  # noqa: BLE001
-        logger.warning("Could not cache PDF index", exc_info=True)
-    return store
+        refs = src.list_pdfs()
+    except Exception:  # noqa: BLE001 - source unreachable -> keep whatever we had
+        logger.warning("PDF source unavailable", exc_info=True)
+        refs = []
+
+    new_pdfs: dict[str, Any] = {}
+    all_chunks: list[dict[str, Any]] = []
+    all_emb: list[list[float]] = []
+    reused = built = 0
+    for ref in refs:
+        prev = prev_pdfs.get(ref.id)
+        if prev and prev.get("fp") == ref.fingerprint:
+            entry = prev
+            reused += 1
+        else:
+            try:
+                data = src.read_bytes(ref.id)
+                chunks = [c.to_dict() for c in extract_chunks(ref.id, ref.name, data)]
+                emb = llm.embed([c["text"] for c in chunks]) if chunks else []
+                entry = {"fp": ref.fingerprint, "name": ref.name, "chunks": chunks, "embeddings": emb}
+                built += 1
+                logger.info("Indexed %s (%d chunks)", ref.name, len(chunks))
+            except Exception:  # noqa: BLE001 - one bad PDF shouldn't break the rest
+                logger.warning("Failed to index %s", ref.name, exc_info=True)
+                continue
+        new_pdfs[ref.id] = entry
+        all_chunks.extend(entry["chunks"])
+        all_emb.extend(entry["embeddings"])
+
+    if refs:
+        logger.info("PDF index: %d reused, %d (re)built, %d total", reused, built, len(new_pdfs))
+    _save_pdf_cache({"embedding_model": s.openai_embedding_model, "pdfs": new_pdfs})
+    return VectorStore(chunks=all_chunks, embeddings=all_emb, meta={"fingerprint": want_fp})
 
 
 def list_documents() -> list[dict[str, Any]]:

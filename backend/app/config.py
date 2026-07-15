@@ -65,8 +65,12 @@ class Settings(BaseSettings):
     # Folder holding lgd_master.xlsx (geography). Bundled in backend/reference
     # so a fresh clone is self-contained. Resolved relative to backend/.
     reference_data_dir: str = "reference"
-    # Chat-with-PDFs: folder of source PDFs (local source; a Google Drive source
-    # can be swapped in behind the same interface). Resolved relative to backend/.
+    # Chat-with-PDFs source: "local" (a folder on disk) or "drive" (a Google Drive
+    # folder). Drive uses the same GOOGLE_CREDENTIALS_JSON service account; share
+    # the Drive folder with that service account's email and set pdf_drive_folder_id.
+    pdf_source: str = "local"
+    pdf_drive_folder_id: str = ""
+    # Local source folder (used when pdf_source=local). Resolved relative to backend/.
     pdf_dir: str = "pdfs"
     # Where the built PDF index (chunks + embeddings) is cached.
     pdf_index_dir: str = "pdf_index"

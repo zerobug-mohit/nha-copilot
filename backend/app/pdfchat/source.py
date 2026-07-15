@@ -74,17 +74,96 @@ class LocalFolderSource(PdfSource):
         return path.read_bytes()
 
 
+class GoogleDriveSource(PdfSource):
+    """PDFs from a Google Drive folder, read via the service account in
+    GOOGLE_CREDENTIALS_JSON (share the folder with that SA's email). New/changed/
+    removed files are detected via each file's modifiedTime (drives reindexing).
+    Works with both My-Drive shared folders and Shared Drives.
+    """
+
+    SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+
+    def __init__(self, folder_id: str | None = None) -> None:
+        s = get_settings()
+        self.folder_id = folder_id or s.pdf_drive_folder_id
+        self._service = None
+
+    def _get_service(self):
+        if self._service is None:
+            import json as _json
+
+            from google.oauth2 import service_account
+            from googleapiclient.discovery import build
+
+            s = get_settings()
+            inline = (s.google_credentials_json or "").strip()
+            if inline:
+                info = _json.loads(inline)
+                creds = service_account.Credentials.from_service_account_info(info, scopes=self.SCOPES)
+            elif s.google_application_credentials:
+                creds = service_account.Credentials.from_service_account_file(
+                    s.google_application_credentials, scopes=self.SCOPES
+                )
+            else:
+                raise RuntimeError("No service-account credentials configured for Google Drive.")
+            self._service = build("drive", "v3", credentials=creds, cache_discovery=False)
+        return self._service
+
+    def list_pdfs(self) -> list[PdfRef]:
+        if not self.folder_id:
+            raise RuntimeError("PDF_DRIVE_FOLDER_ID is not set.")
+        svc = self._get_service()
+        q = f"'{self.folder_id}' in parents and mimeType='application/pdf' and trashed=false"
+        refs: list[PdfRef] = []
+        page_token = None
+        while True:
+            resp = (
+                svc.files()
+                .list(
+                    q=q,
+                    fields="nextPageToken, files(id, name, modifiedTime, size, md5Checksum)",
+                    pageSize=1000,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+            for f in resp.get("files", []):
+                fp = f.get("md5Checksum") or f"{f.get('size','')}:{f.get('modifiedTime','')}"
+                refs.append(PdfRef(id=f["id"], name=f["name"], fingerprint=fp))
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+        return refs
+
+    def read_bytes(self, pdf_id: str) -> bytes:
+        import io
+
+        from googleapiclient.http import MediaIoBaseDownload
+
+        svc = self._get_service()
+        request = svc.files().get_media(fileId=pdf_id, supportsAllDrives=True)
+        buf = io.BytesIO()
+        downloader = MediaIoBaseDownload(buf, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+        return buf.getvalue()
+
+
 _source: PdfSource | None = None
 
 
 def get_pdf_source() -> PdfSource:
     global _source
     if _source is None:
-        _source = LocalFolderSource()
+        s = get_settings()
+        _source = GoogleDriveSource() if s.pdf_source.lower() == "drive" else LocalFolderSource()
     return _source
 
 
 def set_pdf_source(source: PdfSource) -> None:
-    """Swap the source (e.g. a Google Drive source) without touching the rest."""
+    """Swap the source without touching the rest."""
     global _source
     _source = source

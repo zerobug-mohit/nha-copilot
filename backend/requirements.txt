@@ -16,3 +16,6 @@ python-multipart==0.0.20
 pypdfium2==4.30.0
 pytesseract==0.3.13
 Pillow>=10.4
+# Chat-with-PDFs: Google Drive source (optional; pdf_source=drive)
+google-api-python-client>=2.140
+google-auth-httplib2>=0.2
