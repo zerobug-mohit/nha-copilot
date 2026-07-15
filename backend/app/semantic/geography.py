@@ -277,8 +277,14 @@ class GeographyResolver:
         results: list[GeoResolution] = []
         seen: set[str] = set()
 
-        # States first (fewer, higher confidence).
+        # States first (fewer, higher confidence). Skip very short aliases (2-letter
+        # abbreviations like "UP", "AP", "MP") in free-text scanning — they collide
+        # with common English words ("break-UP" -> "up" -> Uttar Pradesh). The full
+        # state names still match; a user who types a bare abbreviation is handled by
+        # the LLM reading the raw question.
         for key, (code, name) in self._state_by_name.items():
+            if len(key) <= 2:
+                continue
             if key and f" {key} " in norm_text and name not in seen:
                 seen.add(name)
                 results.append(
