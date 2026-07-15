@@ -57,23 +57,16 @@ There is **no pre-built merged table** in this dataset (unlike some other NHA
 tools) — tables connect to each other through a shared **facility ID** and/or
 shared **geography columns**. See §10 for exactly how to join them.
 
-> **DATA COVERAGE — READ THIS (critical).** The loaded **activity/fact tables**
-> (`{FACILITY_REGISTRY_TABLE}`, `{PROFESSIONALS_REGISTRY_TABLE}`,
-> `{TOP_INDICATORS_TABLE}`, `{LINKED_TREND_TABLE}`, `{LINKED_FACILITY_TABLE}`,
-> `{SCAN_SHARE_TABLE}`, `{SCAN_PAY_TABLE}`) contain data for **only two states:
-> Bihar (`state_code` 10) and Andhra Pradesh (`state_code` 28)**. No other state
-> has any data. **NEVER assume, invent, name, or filter by any other state**
-> (e.g. Uttar Pradesh, Gujarat, Maharashtra) unless the user explicitly names it —
-> and if they name one that isn't Bihar or Andhra Pradesh, answer honestly that
-> the current dataset only covers those two states (do not fabricate a figure).
-> When the user gives **no** geography, do **not** invent one and do **not**
-> mention a specific state in `answer_template` — just aggregate across the data
-> (which is these two states) and say so if relevant.
-> **Caveat:** `{STATE_DISTRICT_MASTER_TABLE}` is a **full-India lookup** listing
-> all ~36 states/UTs and ~780 districts — its presence does NOT mean those places
-> have activity data. Use it only to translate `state_code`/`district_code` ↔
-> names for the two covered states; never read the master's other state names as
-> evidence of coverage.
+> **DATA COVERAGE.** The dataset is **national — all ~36 states/UTs are present**
+> in the activity/fact tables. Answer for whatever geography the user asks; do NOT
+> restrict to any subset of states. Only decline a specific state if a query
+> genuinely returns no rows for it. Never invent or hard-code a state the user did
+> not ask for; when no geography is given, aggregate across all data (don't name a
+> single state in `answer_template`).
+> **Join caveat:** `{STATE_DISTRICT_MASTER_TABLE}` has **one row per district**
+> (~780). To attach a state name to a state-level aggregate, join a
+> `SELECT DISTINCT state_code, state_name` subquery (never the raw master on
+> `state_code` alone — that fan-outs and inflates sums; see §9).
 
 | Table | Grain | Use it for |
 |---|---|---|
@@ -160,9 +153,9 @@ No facility-level ID in this table — it's aggregated at state/district/date le
 - `today_count` — **near-always 0 in the loaded data — DO NOT use it** for ABHA
   counts. It is a live "today" snapshot that is empty here.
 - `overall_count` — **the ABHA count for that row's state/district/date. Use
-  `SUM(overall_count)`** for "how many ABHA created" (verified: total = 473,139;
-  Bihar 329,496; Andhra Pradesh 143,643). Despite the name it is NOT a running
-  cumulative — the per-day values rise and fall — so summing it is correct.
+  `SUM(overall_count)`** for "how many ABHA created". Despite the name it is NOT a
+  running cumulative — the per-day values rise and fall — so summing it is correct
+  (do NOT use `today_count`, which is ~0).
 - `population_per` — **caution: the source dictionary explicitly describes
   this as "estimated population, randomly distributed across districts" — it
   is NOT an authoritative population figure.** Never state it as fact; if a
@@ -444,8 +437,11 @@ these EXACT values, they are NOT all spelled-out words):**
 - `partner_ownership` follows the same coded `G`/`P` scheme as `facility_ownership`.
 - `hpr_type`: `'d'` (Doctor), `'n'` (Nurse), `'p'` (Pharmacist).
 - `active` (`{LINKED_FACILITY_TABLE}`): `'t'` / `'f'`.
-- `payment_status` (`{SCAN_PAY_TABLE}`): `'SUCCESS'`, `'CANCELED'`, `'FAIL'`,
-  `'PENDING'` (upper-case).
+- `payment_status` (`{SCAN_PAY_TABLE}`): messy in the full data — values include
+  `SUCCESS`, `FAIL`, `FAILURE`, `CANCELED`, `PENDING`, and mixed case (`Pending`).
+  When grouping/filtering, normalize with `UPPER(payment_status)` and treat
+  `FAIL`/`FAILURE` as the same and `SUCCESS` as success; e.g.
+  `WHERE UPPER(payment_status) = 'SUCCESS'`.
 - `status` (`{BRIDGE_INTEGRATOR_TABLE}`): `'ACTIVE'`, `'DEACTIVATE'`, `'CONSUMER'`.
 - When grouping by any coded column, prefer returning the raw code and let the UI
   label it, or map it inline with a `CASE` only if the user asked for named
@@ -472,9 +468,8 @@ Terms that almost always need clarification in this domain:
 
 **Answer directly, without asking**, when the question names a concrete
 metric and dimension with an obvious default: geography not given → aggregate
-across the covered data (Bihar + Andhra Pradesh only — do NOT name or filter to
-any single state, and never mention Uttar Pradesh/Gujarat/etc.); period not
-given → full data window;
+across all states (do NOT name or filter to any single state you weren't asked
+about); period not given → full data window;
 "how many facilities registered" → `COUNT(DISTINCT hfr_id)`; "how many Scan
 & Share transactions" → `SUM(counts)`; "how many Scan & Pay transactions" →
 `SUM(facility_count)`; "total payment amount" → `SUM(payment_amount)`.
@@ -499,10 +494,11 @@ receives this document next:
 4. ✅ **Date ranges** — confirmed per table (§10).
 5. ✅ **BigQuery column types** — explicit schema specified, autodetect not
    relied upon (§11).
-6. ✅ **The two states with data are Bihar (10) and Andhra Pradesh (28)** — a
-   sampling choice, not data-absence. See the DATA COVERAGE box in §1: never
-   assume/invent any other state; the master table's full-India list is a lookup,
-   not coverage.
+6. ✅ **Coverage is national — all ~36 states/UTs are present** in the full data.
+   Answer for any state the user asks; see the DATA COVERAGE note in §1. (Facility-
+   level joins between the transaction/linking tables and the HFR registry are
+   sparse — those tables cover different facility subsets — but the join keys and
+   the bridge/geography joins are valid and dense.)
 
 One small residual note, narrower than a full open question: the `hip_id`/
 `service_id` suffix-stripping agreement was directly verified in
