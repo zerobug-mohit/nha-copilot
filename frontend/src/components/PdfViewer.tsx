@@ -1,60 +1,84 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
-import "react-pdf/dist/Page/TextLayer.css";
-import "react-pdf/dist/Page/AnnotationLayer.css";
-import type { LineBox } from "../api";
+import { fetchPdfPageUrl, type LineBox } from "../api";
 
-// Bundle the pdf.js worker via Vite.
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
-
+// Image-based viewer: shows the server-rendered page PNG (the exact render the OCR
+// boxes were measured against) and overlays highlights as fractions × the image's
+// displayed size — so highlights line up pixel-for-pixel regardless of PDF
+// point-space quirks across libraries.
 export default function PdfViewer({
-  blobUrl,
+  token,
+  pdfId,
   docName,
   targetPage,
   highlights,
+  numPages,
 }: {
-  blobUrl: string | null;
+  token: string;
+  pdfId: string | null;
   docName?: string;
   targetPage: number;
-  highlights: LineBox[]; // coordinates are page FRACTIONS (0..1)
+  highlights: LineBox[]; // page fractions (0..1)
+  numPages: number;
 }) {
-  const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(targetPage || 1);
-  const [width, setWidth] = useState(600);
-  // Page intrinsic aspect (height/width); rendered size = width × [1, aspect].
-  const [aspect, setAspect] = useState(0);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   const hlRef = useRef<HTMLDivElement>(null);
+  const cache = useRef<Map<string, string>>(new Map());
 
-  // Follow the cited page whenever a new citation is opened.
+  // Follow the cited page whenever a new citation opens.
   useEffect(() => {
     if (targetPage) setPage(targetPage);
-  }, [targetPage, blobUrl]);
+  }, [targetPage, pdfId]);
 
-  // Fit the rendered page to the pane width.
-  useLayoutEffect(() => {
-    const measure = () => {
-      if (wrapRef.current) setWidth(Math.max(280, wrapRef.current.clientWidth - 24));
+  // Load the page image (cached per pdf:page).
+  useEffect(() => {
+    if (!pdfId) return;
+    let cancelled = false;
+    const key = `${pdfId}:${page}`;
+    setDims(null);
+    const cached = cache.current.get(key);
+    if (cached) {
+      setImgUrl(cached);
+      return;
+    }
+    setLoading(true);
+    fetchPdfPageUrl(token, pdfId, page)
+      .then((u) => {
+        if (cancelled) return;
+        cache.current.set(key, u);
+        setImgUrl(u);
+      })
+      .catch(() => !cancelled && setImgUrl(null))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
     };
-    measure();
+  }, [pdfId, page, token]);
+
+  useEffect(() => () => cache.current.forEach((u) => URL.revokeObjectURL(u)), []);
+
+  const measure = () => {
+    if (imgRef.current && imgRef.current.clientWidth) {
+      setDims({ w: imgRef.current.clientWidth, h: imgRef.current.clientHeight });
+    }
+  };
+  useLayoutEffect(() => {
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  // Scroll the highlight into view after it renders.
+  // Scroll the highlight into view once the image + dims are ready.
   useEffect(() => {
-    const t = setTimeout(() => hlRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 250);
+    const t = setTimeout(() => hlRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 200);
     return () => clearTimeout(t);
-  }, [page, blobUrl, highlights]);
+  }, [dims, page, highlights]);
 
-  const onCited = page === targetPage && highlights.length > 0 && aspect > 0;
-  const rw = width;
-  const rh = width * aspect;
+  const onCited = page === targetPage && highlights.length > 0 && !!dims;
 
-  if (!blobUrl) {
+  if (!pdfId) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center text-sm text-ink-faint">
         Click a citation in an answer to open the source PDF here, at the exact page and line.
@@ -82,46 +106,39 @@ export default function PdfViewer({
         </div>
       </div>
 
-      {/* Page + highlight overlay */}
-      <div ref={wrapRef} className="flex-1 overflow-auto bg-surface-alt/60 p-3">
-        <Document
-          file={blobUrl}
-          onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-          loading={<div className="p-6 text-sm text-ink-faint">Loading PDF…</div>}
-          error={<div className="p-6 text-sm text-danger">Could not load the PDF.</div>}
-        >
-          <div className="relative mx-auto w-fit shadow-pop">
-            <Page
-              pageNumber={page}
-              width={width}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-              onLoadSuccess={(p: any) => {
-                if (p?.originalWidth) setAspect(p.originalHeight / p.originalWidth);
-              }}
-              loading={<div className="p-6 text-sm text-ink-faint">Rendering page…</div>}
+      {/* Page image + highlight overlay */}
+      <div className="flex-1 overflow-auto bg-surface-alt/60 p-3">
+        <div className="relative mx-auto w-fit shadow-pop">
+          {imgUrl && (
+            <img
+              ref={imgRef}
+              src={imgUrl}
+              alt={`${docName} page ${page}`}
+              onLoad={measure}
+              className="block max-w-full"
             />
-            {onCited && (
-              <div className="pointer-events-none absolute inset-0">
-                {highlights.map((b, i) => (
-                  <div
-                    key={i}
-                    ref={i === 0 ? hlRef : undefined}
-                    className="absolute rounded-sm"
-                    style={{
-                      left: b.x0 * rw - 2,
-                      top: b.top * rh - 1,
-                      width: (b.x1 - b.x0) * rw + 4,
-                      height: (b.bottom - b.top) * rh + 2,
-                      background: "rgba(237, 200, 40, 0.32)",
-                      boxShadow: "0 0 0 1px rgba(200, 150, 0, 0.55)",
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </Document>
+          )}
+          {loading && <div className="p-6 text-sm text-ink-faint">Rendering page…</div>}
+          {onCited && dims && (
+            <div className="pointer-events-none absolute inset-0">
+              {highlights.map((b, i) => (
+                <div
+                  key={i}
+                  ref={i === 0 ? hlRef : undefined}
+                  className="absolute rounded-sm"
+                  style={{
+                    left: b.x0 * dims.w - 2,
+                    top: b.top * dims.h - 1,
+                    width: (b.x1 - b.x0) * dims.w + 4,
+                    height: (b.bottom - b.top) * dims.h + 2,
+                    background: "rgba(237, 200, 40, 0.32)",
+                    boxShadow: "0 0 0 1px rgba(200, 150, 0, 0.55)",
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

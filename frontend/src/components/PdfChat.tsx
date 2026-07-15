@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  fetchPdfBlobUrl,
   fetchPdfDocuments,
   sendPdfMessage,
   type LineBox,
@@ -19,11 +18,10 @@ interface PdfMsg {
 
 interface Active {
   pdfId: string;
-  blobUrl: string;
   docName: string;
   page: number;
   highlights: LineBox[];
-  pageWidthPts: number;
+  numPages: number;
   key: number; // bumps so the viewer re-targets even to the same page
 }
 
@@ -39,7 +37,6 @@ export default function PdfChat({ token }: { token: string }) {
   const [docs, setDocs] = useState<PdfDocument[]>([]);
   const [active, setActive] = useState<Active | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const blobCache = useRef<Map<string, string>>(new Map());
   const endRef = useRef<HTMLDivElement>(null);
   const clickSeq = useRef(0);
 
@@ -51,24 +48,16 @@ export default function PdfChat({ token }: { token: string }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
-  // Revoke object URLs on unmount.
-  useEffect(() => () => blobCache.current.forEach((u) => URL.revokeObjectURL(u)), []);
-
-  async function openCitation(c: PdfCitation) {
+  function openCitation(c: PdfCitation) {
     setError(null);
     try {
-      let blobUrl = blobCache.current.get(c.pdf_id);
-      if (!blobUrl) {
-        blobUrl = await fetchPdfBlobUrl(token, c.pdf_id);
-        blobCache.current.set(c.pdf_id, blobUrl);
-      }
+      const doc = docs.find((d) => d.id === c.pdf_id);
       setActive({
         pdfId: c.pdf_id,
-        blobUrl,
         docName: c.pdf_name,
         page: c.page,
         highlights: c.lines || [],
-        pageWidthPts: c.page_width,
+        numPages: doc?.pages ?? 0,
         key: ++clickSeq.current,
       });
     } catch {
@@ -215,10 +204,12 @@ export default function PdfChat({ token }: { token: string }) {
       <div className="min-h-0 flex-1">
         <PdfViewer
           key={active?.key ?? "empty"}
-          blobUrl={active?.blobUrl ?? null}
+          token={token}
+          pdfId={active?.pdfId ?? null}
           docName={active?.docName}
           targetPage={active?.page ?? 1}
           highlights={active?.highlights ?? []}
+          numPages={active?.numPages ?? 0}
         />
       </div>
     </div>

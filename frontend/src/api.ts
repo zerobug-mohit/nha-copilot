@@ -176,6 +176,17 @@ export async function fetchPdfBlobUrl(token: string, pdfId: string): Promise<str
   return URL.createObjectURL(await res.blob());
 }
 
+/** Fetch a rendered page image (auth-protected) as a blob object URL. The image
+ * is the same render the OCR boxes were measured against, so fractional highlight
+ * coordinates align exactly. */
+export async function fetchPdfPageUrl(token: string, pdfId: string, page: number): Promise<string> {
+  const res = await fetch(url(`/pdfchat/page/${pdfId}/${page}`), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Page render failed (${res.status})`);
+  return URL.createObjectURL(await res.blob());
+}
+
 export async function sendMessage(
   token: string,
   message: string,
