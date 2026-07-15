@@ -85,7 +85,7 @@ def validate_sql(sql: str) -> ValidationResult:
             if col.name and col.name.lower() in PII_COLUMNS
         }
     )
-    # Also catch aliased projections like `SELECT patient_name AS n`.
+    # Also catch aliased projections like `SELECT abha_address AS a`.
     for alias in stmt.find_all(exp.Alias):
         inner = alias.this
         if isinstance(inner, exp.Column) and inner.name.lower() in PII_COLUMNS:

@@ -1,8 +1,17 @@
 # NHA SHA Analytical Co-pilot — System Architecture
 
-**Version:** 0.3 (Prototype Scope)
+> ⚠️ **SUPERSEDED / HISTORICAL.** This document describes the original **PM-JAY
+> claims (TMS/BIS)** design. The project has since been migrated to the **ABDM
+> digital-adoption** domain (9 tables, no merged table). The architecture *shape*
+> (React → FastAPI → BigQuery, three-layer SQL safety, RBAC, NL-to-SQL via a
+> governance prompt) still holds, but the **data model, tables, columns, and
+> domain rules here are out of date**. For the current, authoritative schema and
+> rules see **`backend/CLAUDE.md`**, and for setup/usage see the top-level
+> **`README.md`**. Kept for design-rationale history only.
+
+**Version:** 0.3 (Prototype Scope — PM-JAY era, superseded)
 **Audience:** Developer
-**Status:** Design specification — not yet implemented
+**Status:** Design specification — historical
 **Change from v0.1:** Core intelligence layer revised from parameterised function library to free-form NL-to-SQL generation. Rationale documented in Section 4.3.
 **Change from v0.2:** Section 7 rewritten with the actual generated structure of both synthetic tables (real column counts, join-key format, repeat-visit design, geographic scope asymmetry between the two tables). New Section 7.4 documents data quality quirks deliberately preserved from the real source files. Section 4.6 and Section 13 updated to reflect what is now known versus still assumed.
 

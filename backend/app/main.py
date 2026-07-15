@@ -24,7 +24,7 @@ from app.report.router import router as report_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="NHA SHA Analytical Co-pilot", version="0.3.0")
+app = FastAPI(title="NHA Analytics Co-Pilot", version="0.3.0")
 
 settings = get_settings()
 

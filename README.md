@@ -1,37 +1,79 @@
-# NHA SHA Analytical Co-pilot (Prototype)
+# NHA Analytics Co-Pilot (Prototype)
 
 [![Live App](https://img.shields.io/badge/%F0%9F%9A%80%20Live%20App-Open-0f7c8b?style=for-the-badge)](https://zerobug-mohit.github.io/nha-copilot/)
 
 > **Live demo:** https://zerobug-mohit.github.io/nha-copilot/
 
-A web-based **natural-language → SQL** chat co-pilot for NHA / SHA / HAAU
-officials to query PM-JAY **claims (TMS)** and **beneficiary (BIS)** data in
-plain English. Built to the v0.3 architecture (`../nha_query_tool_architecture.md`),
-adapted for **Google BigQuery** as the data layer and **OpenAI** as the LLM.
+A web-based **natural-language → SQL** chat co-pilot for NHA / ABDM officials to
+query **ABDM (Ayushman Bharat Digital Mission) rollout data** in plain English —
+health facility (HFR) and professional (HPR) registration, ABHA (health ID)
+creation, health-record linking, and digital-transaction adoption (Scan & Share,
+Scan & Pay) across facilities, bridges, states and districts. Data layer is
+**Google BigQuery**; the LLM is **OpenAI**.
 
 ```
 Browser (React) ──HTTPS──▶ FastAPI backend ──read-only SQL──▶ BigQuery
                               │  auth / RBAC
                               │  NL-to-SQL (CLAUDE.md + OpenAI)
                               │  SQL safety (SELECT-only, PII, sqlglot)
-                              │  semantic (LGD geography, time, HBP synonyms)
+                              │  semantic (LGD geography, time)
                               └  query log (SQLite)
 ```
 
 ## Safety model (three independent layers)
-1. **System prompt** (`backend/CLAUDE.md`) — instructs the LLM to emit only `SELECT`.
+1. **System prompt** (`backend/CLAUDE.md`) — instructs the LLM to emit only a single `SELECT`.
 2. **SQL validation** (`sql_safety/validator.py`) — parses with sqlglot, rejects
    any non-SELECT / multi-statement / PII-column query before execution.
 3. **IAM read-only** — the BigQuery service account is granted only
    `bigquery.dataViewer` + `bigquery.jobUser`, so the database itself refuses writes.
 
-RBAC (`viewer` / `analyst` / `senior_analyst` / `admin`) restricts query
-*granularity* (state → district → hospital) via column inspection.
+Facility identity (name / ID / address) is public dashboard data and is
+displayable; the only hard-blocked PII is `abha_address` (a patient ABHA address,
+already removed at data prep). RBAC (`viewer` / `analyst` / `senior_analyst` /
+`admin`) restricts query *granularity* (state → district → facility) via column
+inspection.
+
+## Data model — 9 ABDM tables (no merged table)
+The co-pilot queries nine tables directly, joined by **facility ID** and/or
+**geography**. There is no pre-built merged table. The authoritative schema,
+join rules, and business rules live in **`backend/CLAUDE.md`** (the governance
+prompt). In brief:
+
+| Table | Use it for |
+|---|---|
+| `health_facility_registry` | facility profile: type, ownership, verification, address |
+| `health_professionals_registry` | HPR (doctor/nurse/pharmacist) registration counts |
+| `healthid_top_indicators` | ABHA (health ID) creation counts |
+| `healthid_linked_trend` | health-record linking activity (by document type) |
+| `linked_facility` | facility ↔ bridge links and whether active |
+| `scan_and_share` | Scan & Share transaction counts |
+| `scan_pay_count` | Scan & Pay transaction counts and payment amounts/status |
+| `state_district_master` | full-India code ↔ name lookup (join carefully — see below) |
+| `integrator_detail` | bridge / software-vendor reference (status, milestone, ownership) |
+
+**Key rules encoded in `CLAUDE.md`** (verified against the data):
+- Facilities → `COUNT(DISTINCT hfr_id)`. ABHA created → `SUM(overall_count)`
+  (`today_count` is ~always 0). HPR → `SUM(registered_count)`. Records linked →
+  `SUM(record_linked_count)` (never `hid_linked_count`). Scan & Share →
+  `SUM(counts)`; Scan & Pay → `SUM(facility_count)` / `SUM(payment_amount)`.
+- **Coverage:** the activity tables currently hold only **Bihar (10)** and
+  **Andhra Pradesh (28)** — the model answers honestly for any other state.
+- **Coded values:** `facility_ownership` is `G`/`P`/`PP` (not spelled out);
+  `active` is `t`/`f`; `hpr_type` is `d`/`n`/`p`. (`ownership` /
+  `facility_ownership_desc` are full text.)
+- **Join fan-out:** `state_district_master` is one row per district — to name a
+  state-level aggregate, join a `SELECT DISTINCT state_code, state_name` subquery,
+  never the raw master on `state_code` alone.
+- **Dates:** mostly `DATE`, but `healthid_linked_trend.created_date` and
+  `scan_and_share.date_created` are `DATETIME` (wrap with `DATE(col)` for day-level filters).
+- Join keys: `hfr_id` = `hip_id`; `hosp_id`/`service_id` may carry a `_N` suffix
+  (strip before joining); `bridge_id` = `integrator_detail.production_bridge_id`.
 
 ## Prerequisites
 - Python 3.11+ and Node 18+ (verified on Python 3.13 / Node 24).
-- A BigQuery dataset holding the two tables (`claim_paid_excel_t`,
-  `t_bis_beneficiary_dtl`) and a service-account JSON key with read-only access.
+- A BigQuery dataset holding the nine tables above and a service-account JSON key
+  with read-only access. Load the CSVs with an **explicit schema** (all ID/code
+  columns as STRING) — do not use CSV autodetect.
 - An OpenAI API key.
 
 ## Setup
@@ -39,7 +81,7 @@ RBAC (`viewer` / `analyst` / `senior_analyst` / `admin`) restricts query
 ### Backend
 ```bash
 cd backend
-cp .env.example .env          # then fill in GCP project/dataset, key path, OpenAI key, JWT secret
+cp .env.example .env          # fill in GCP project/dataset, key, OpenAI key, JWT secret
 python -m venv .venv
 ./.venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
 # smoke-test BigQuery connectivity + read-only enforcement:
@@ -57,7 +99,7 @@ npm run dev                   # http://localhost:5173 (proxies /auth, /chat to :
 
 ## Prototype users
 `viewer` / `analyst` / `senior` / `admin`, password = `<username>123`
-(e.g. `analyst` / `analyst123`). Change these in `backend/app/auth/users.py`.
+(e.g. `analyst` / `analyst123`). Override in production via the `APP_USERS` env var.
 
 ## Endpoints
 | Endpoint | Method | Notes |
@@ -65,41 +107,24 @@ npm run dev                   # http://localhost:5173 (proxies /auth, /chat to :
 | `/auth/login` | POST | issues JWT |
 | `/chat/message` | POST | main chat turn (rate-limited 60/min) |
 | `/chat/session/{id}` | GET | session history |
+| `/report/weekly` | GET | weekly ABDM report payload |
+| `/explorer` | GET | proactive insight cards |
 | `/query-log` | GET | admin only |
 | `/health` | GET | liveness |
 
 ## Tests
 ```bash
-cd backend && ./.venv/Scripts/python.exe -m pytest -q
+cd backend  && ./.venv/Scripts/python.exe -m pytest -q     # safety, RBAC, semantic, pipeline
+cd frontend && npm test                                    # chart-decision engine
 ```
-Covers SQL safety, RBAC, geography/time/synonym resolution, and the NL-to-SQL
-pipeline's deterministic short-circuits (ambiguous district, brownfield-state
-claims) with a faked LLM/BigQuery.
+A live eval harness (hits OpenAI + BigQuery) covers routing, coded values,
+joins, dates, geography, language mirroring, and numeric accuracy vs BigQuery:
+```bash
+cd backend && ./.venv/Scripts/python.exe scripts/eval_model.py
+```
 
-## Data model — single merged table
-The co-pilot queries **one denormalised table**, `BIS_TMS_Sample_Merged`, created
-by `scripts/create_merged_table.sql` (run once in the BigQuery Console; the app's
-service account is read-only and cannot create it). It is
-**BIS `LEFT JOIN` TMS on `TMS.member_id = BIS.card_no`**:
-- one row per beneficiary-claim; every registered beneficiary appears,
-- claim columns are **`tms_`-prefixed** and **`NULL`** when the beneficiary has no
-  claim (household members + all 7 brownfield states),
-- a beneficiary with N claims appears in N rows.
-
-To (re)create or rescope it, edit `scripts/create_merged_table.sql` and set
-`BQ_MERGED_TABLE` in `.env`.
-
-## Key domain rules encoded in `backend/CLAUDE.md`
-- Registered beneficiaries → `COUNT(DISTINCT card_no)` (rows repeat per claim).
-- Claims/cases → filter `tms_case_id IS NOT NULL`; patients-with-claims →
-  `COUNT(DISTINCT card_no)` (repeat-visit dialysis/chemo/ECT rows).
-- Amount paid → `tms_amount_claim_paid`.
-- Brownfield states have registrations but **no claims** → claims questions return
-  a scoped *no-data* answer (not zero); registration questions are valid.
-- Preserved source quirks: `MAHARASTRA` spelling, `RAJASTHAN`/`Rajasthan` casing,
-  relation-code gaps, `enrl_status` vs `enrol_status`.
-- PII columns (incl. `tms_patient_name`, `aadhaar_no`, …) are never selectable.
-
-## Out of scope (per architecture §12)
-Push/digest (Pulse), anomaly detection (Sentinel), Hospital Empanelment (HEM),
-file export, cross-session memory, live NHA API integration.
+## Deployment
+Frontend builds to static files (GitHub Pages). Backend runs as a service behind
+a reverse proxy (see `deploy/`). Set `OPENAI_MODEL`, `APP_USERS`, and the GCP
+credentials via the environment; table names default to the loaded names in
+`app/config.py` and only need overriding if yours differ.

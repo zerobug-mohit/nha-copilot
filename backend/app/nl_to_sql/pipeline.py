@@ -34,7 +34,7 @@ FAILURE_MESSAGE = (
 
 @dataclass
 class TurnResult:
-    action: str  # "answer" | "clarify" | "out_of_scope" | "error"
+    action: str  # "answer" | "clarify" | "out_of_scope" | "chat" | "error"
     answer: str | None = None
     message: str | None = None
     sql: str | None = None

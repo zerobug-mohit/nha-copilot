@@ -136,9 +136,12 @@ unless the question is explicitly about applications/records, not distinct facil
 ## 3. `{PROFESSIONALS_REGISTRY_TABLE}` — HPR registration
 
 - `state_code`, `district_code` INT64
-- `today_count` — professionals verified today
-- `application_count` — total HPR applications
-- `registered_count` — total HPR verified count
+- `today_count` — **near-always 0 in the loaded data — DO NOT use it** for
+  "professionals registered". It is a live daily snapshot that is empty here.
+- `application_count` — HPR applications (per row).
+- `registered_count` — **the count of HPR registered. Use `SUM(registered_count)`**
+  for "how many professionals registered" (optionally grouped by `hpr_type`). It
+  is a per-row count, so it sums correctly; it is NOT a running cumulative total.
 - `hpr_type` STRING — **confirmed values: `'d'`, `'n'`, `'p'`** (lowercase
   single letters). Per the source dictionary's description ("HPR Type
   (Doctor/Nurse/Pharmacist)"), these almost certainly map to Doctor / Nurse /
@@ -154,8 +157,12 @@ No facility-level ID in this table — it's aggregated at state/district/date le
 ## 4. `{TOP_INDICATORS_TABLE}` — ABHA (health ID) creation
 
 - `state_code`, `district_code` INT64
-- `today_count` — ABHAs created today
-- `overall_count` — cumulative ABHA count
+- `today_count` — **near-always 0 in the loaded data — DO NOT use it** for ABHA
+  counts. It is a live "today" snapshot that is empty here.
+- `overall_count` — **the ABHA count for that row's state/district/date. Use
+  `SUM(overall_count)`** for "how many ABHA created" (verified: total = 473,139;
+  Bihar 329,496; Andhra Pradesh 143,643). Despite the name it is NOT a running
+  cumulative — the per-day values rise and fall — so summing it is correct.
 - `population_per` — **caution: the source dictionary explicitly describes
   this as "estimated population, randomly distributed across districts" — it
   is NOT an authoritative population figure.** Never state it as fact; if a
@@ -280,6 +287,19 @@ marked "Not Accurate" (estimated) in the source dictionary — always caveat
 any answer that relies on it**, e.g. "based on estimated population figures."
 Use this table to translate codes ↔ names; it's rarely the main subject of a
 question by itself.
+
+> **JOIN FAN-OUT WARNING (critical for correct totals).** This master has **one
+> row per district** (~780 rows). If you join a district-grain fact table (ABHA,
+> HPR, linking, etc.) to it on `state_code` ALONE, every fact row multiplies by
+> the number of districts in that state — hugely inflating any SUM (this once
+> turned a real 329,496 into 12.5 million). To attach a **state name** to a
+> **state-level** aggregate, either:
+> - aggregate first, then join a de-duplicated state map:
+>   `... JOIN (SELECT DISTINCT state_code, state_name FROM {STATE_DISTRICT_MASTER_TABLE}) m ON f.state_code = m.state_code`, or
+> - just `GROUP BY state_code` and let the UI show the code / map it.
+>
+> To attach a **district name**, join on `district_code` (which is unique in the
+> master), not `state_code`. Never join a fact to the raw master on `state_code`.
 
 **`{BRIDGE_INTEGRATOR_TABLE}`** — bridge/software-vendor reference:
 `production_bridge_id`, `production_name`, `milestone`, `sandbox_client_id`,

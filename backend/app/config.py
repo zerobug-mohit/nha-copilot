@@ -12,8 +12,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/ directory (this file is backend/app/config.py)
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-# repo root that holds the reference data files (one level above nha-copilot/)
-PROJECT_ROOT = BACKEND_DIR.parent.parent
 
 
 class Settings(BaseSettings):
@@ -63,7 +61,7 @@ class Settings(BaseSettings):
 
     # App
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
-    # Folder holding lgd_master.xlsx / HBP-2022.pdf. Bundled in backend/reference
+    # Folder holding lgd_master.xlsx (geography). Bundled in backend/reference
     # so a fresh clone is self-contained. Resolved relative to backend/.
     reference_data_dir: str = "reference"
 

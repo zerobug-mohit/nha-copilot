@@ -58,10 +58,10 @@ SINGLE = [
     {"id": "ss-month", "q": "Monthly trend of Scan & Share transactions", "action": ["answer", "clarify"]},
     # ---- joins across the ID space ----
     {"id": "sp-by-owner", "q": "Scan & Pay volume by facility ownership type", "action": "answer"},
-    # ---- geography (no brownfield now — every state answerable) ----
-    {"id": "gj-fac", "q": "How many facilities in Gujarat?", "action": "answer"},
+    # ---- geography (only Bihar + Andhra Pradesh have data) ----
+    {"id": "ap-fac", "q": "How many facilities in Andhra Pradesh?", "action": "answer"},
     {"id": "ambig-dist", "q": "Show me facilities in Aurangabad", "action": "clarify"},
-    {"id": "orissa", "q": "Facilities registered in Orissa", "action": "answer"},
+    {"id": "nodata-state", "q": "Facilities registered in Gujarat", "action": ["out_of_scope", "answer"]},
     # ---- clarify on vague metrics ----
     {"id": "top-fac", "q": "Show me the top facilities", "action": "clarify"},
     {"id": "adoption", "q": "Which districts have the best digital adoption?", "action": "clarify"},
@@ -102,8 +102,8 @@ MULTI = [
         {"q": "the one in Bihar", "action": "answer"},
     ]},
     {"id": "context-carry", "role": "analyst", "turns": [
-        {"q": "how many facilities are registered in Gujarat?", "action": "answer"},
-        {"q": "and in Bihar?", "action": "answer"},
+        {"q": "how many facilities are registered in Bihar?", "action": "answer"},
+        {"q": "and in Andhra Pradesh?", "action": "answer"},
     ]},
     {"id": "lang-switch", "role": "analyst", "turns": [
         {"q": "बिहार में कितनी फैसिलिटी हैं?", "action": "answer", "script": "dev"},

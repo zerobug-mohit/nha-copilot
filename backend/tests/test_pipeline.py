@@ -38,8 +38,8 @@ def test_full_success_path(monkeypatch):
             {
                 "action": "sql",
                 "sql": "SELECT COUNT(DISTINCT hfr_id) AS facilities "
-                "FROM `p.d.health_facility_registry` WHERE state_code=24",
-                "answer_template": "Facilities registered in Gujarat.",
+                "FROM `p.d.health_facility_registry` WHERE state_code=10",
+                "answer_template": "Facilities registered in Bihar.",
             }
         )
     )
@@ -48,13 +48,13 @@ def test_full_success_path(monkeypatch):
     )()
     monkeypatch.setattr(pipeline, "get_bigquery_client", lambda: fake_bq)
     r = pipeline.run_turn(
-        "How many facilities are registered in Gujarat?",
+        "How many facilities are registered in Bihar?",
         role="analyst",
         today=date(2026, 7, 6),
     )
     assert r.action == "answer"
     assert r.sql and "COUNT(DISTINCT hfr_id)" in r.sql
-    assert r.context_chips.get("geography", "").lower().startswith("gujarat")
+    assert r.context_chips.get("geography", "").lower().startswith("bihar")
 
 
 def test_llm_clarify_passes_options_through():

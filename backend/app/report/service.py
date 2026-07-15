@@ -83,7 +83,8 @@ def build_weekly_report(start: date, end: date, llm=None) -> dict:
 
     # ---- Period volume metrics (+ previous period for WoW) ----
     def abha_created(a: date, b: date) -> float:
-        return _num(_one(bq, f"SELECT SUM(today_count) AS v FROM {ABHA} WHERE {_period('created_date', a, b)}").get("v"))
+        # overall_count is the per-day ABHA count (today_count is ~always 0). See CLAUDE.md §4.
+        return _num(_one(bq, f"SELECT SUM(overall_count) AS v FROM {ABHA} WHERE {_period('created_date', a, b)}").get("v"))
 
     def records_linked(a: date, b: date) -> float:
         return _num(_one(bq, f"SELECT SUM(record_linked_count) AS v FROM {LINK} WHERE {_period('created_date', a, b, True)}").get("v"))
@@ -101,7 +102,7 @@ def build_weekly_report(start: date, end: date, llm=None) -> dict:
 
     sp_amt = _num(_one(bq, f"SELECT SUM(payment_amount) AS v FROM {SP} WHERE {_period('date_created', start, end)}").get("v"))
     fac_verified = _num(_one(bq, f"SELECT COUNT(DISTINCT hfr_id) AS v FROM {FAC} WHERE {_period('verified_date', start, end)}").get("v"))
-    hpr_verified = _num(_one(bq, f"SELECT SUM(today_count) AS v FROM {HPR} WHERE {_period('created_date', start, end)}").get("v"))
+    hpr_verified = _num(_one(bq, f"SELECT SUM(registered_count) AS v FROM {HPR} WHERE {_period('created_date', start, end)}").get("v"))
     active_links = _num(_one(bq, f"SELECT COUNT(*) AS v FROM {LFAC} WHERE active = 't'").get("v"))
     states_covered = _num(_one(bq, f"SELECT COUNT(DISTINCT state_code) AS v FROM {ABHA} WHERE {_period('created_date', start, end)}").get("v"))
 
@@ -125,7 +126,7 @@ def build_weekly_report(start: date, end: date, llm=None) -> dict:
 
     # ---- Geography breakdowns (resolve state_code -> name via the master) ----
     SM = f"(SELECT DISTINCT state_code, state_name FROM {s.table_ref('state_district_master')})"
-    abha_by_state = _rows(bq, f"""SELECT sm.state_name AS state, SUM(a.today_count) AS abha_created
+    abha_by_state = _rows(bq, f"""SELECT sm.state_name AS state, SUM(a.overall_count) AS abha_created
         FROM {ABHA} a LEFT JOIN {SM} sm ON a.state_code = sm.state_code
         WHERE {_period('a.created_date', start, end)}
         GROUP BY state ORDER BY abha_created DESC LIMIT 10""")
@@ -146,7 +147,7 @@ def build_weekly_report(start: date, end: date, llm=None) -> dict:
         GROUP BY facility_type ORDER BY facilities DESC LIMIT 8""")
 
     # ---- Professionals by type (d/n/p) ----
-    hpr_by_type = _rows(bq, f"""SELECT hpr_type, SUM(today_count) AS professionals
+    hpr_by_type = _rows(bq, f"""SELECT hpr_type, SUM(registered_count) AS professionals
         FROM {HPR} WHERE {_period('created_date', start, end)}
         GROUP BY hpr_type ORDER BY professionals DESC""")
 

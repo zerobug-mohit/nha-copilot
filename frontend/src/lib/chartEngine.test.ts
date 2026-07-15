@@ -11,11 +11,11 @@ const rows = (...r: Row[]) => r;
 // Representative queries — the "core" cases the tool must always get right.
 // ---------------------------------------------------------------------------
 
-describe("single-measure ranking (claims by state)", () => {
-  const spec: ChartSpecLike = { type: "bar", x: "state", series: ["claim_count"], drilldown: "district" };
+describe("single-measure ranking (facilities by state)", () => {
+  const spec: ChartSpecLike = { type: "bar", x: "state", series: ["facilities"], drilldown: "district" };
   const data = rows(
-    { state: "UTTAR PRADESH", claim_count: 62 },
-    { state: "GUJARAT", claim_count: 138 },
+    { state: "ANDHRA PRADESH", facilities: 62 },
+    { state: "BIHAR", facilities: 138 },
   );
   const r = resolveChart(spec, data);
 
@@ -24,14 +24,14 @@ describe("single-measure ranking (claims by state)", () => {
     expect(r.allowed).toEqual(["bar", "pie"]);
   });
   it("sorts categories by value descending", () => {
-    expect(r.chartData.map((d) => d.state)).toEqual(["GUJARAT", "UTTAR PRADESH"]);
-    expect(r.chartData.map((d) => d.claim_count)).toEqual([138, 62]);
+    expect(r.chartData.map((d) => d.state)).toEqual(["BIHAR", "ANDHRA PRADESH"]);
+    expect(r.chartData.map((d) => d.facilities)).toEqual([138, 62]);
   });
   it("keeps values exact (no axis/domain padding in the data)", () => {
-    const maxVal = Math.max(...r.chartData.map((d) => d.claim_count as number));
+    const maxVal = Math.max(...r.chartData.map((d) => d.facilities as number));
     expect(maxVal).toBe(138); // never 149.04… — the engine never scales values
   });
-  it("goes horizontal because a label is long (UTTAR PRADESH)", () => {
+  it("goes horizontal because a label is long (ANDHRA PRADESH)", () => {
     expect(r.layout.horizontal).toBe(true);
     expect(r.layout.showLabels).toBe(true);
   });
