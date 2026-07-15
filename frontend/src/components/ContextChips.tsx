@@ -4,7 +4,6 @@ export default function ContextChips({ chips }: { chips: Record<string, string> 
   const label: Record<string, string> = {
     geography: "Location",
     period: "Period",
-    specialty: "Specialty",
   };
   return (
     <div className="mb-2 flex flex-wrap gap-1.5">

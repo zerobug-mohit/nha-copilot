@@ -43,7 +43,7 @@ export async function exportToExcel(opts: {
   const ExcelJS: any = await import("exceljs");
   const Workbook = ExcelJS.Workbook || ExcelJS.default?.Workbook;
   const wb = new Workbook();
-  wb.creator = "NHA SHA Analytical Co-pilot";
+  wb.creator = "NHA Analytics Co-Pilot";
   const ws = wb.addWorksheet("Result", { views: [{ state: "frozen", ySplit: 2 }] });
 
   const nCols = columns.length;
@@ -111,7 +111,7 @@ export async function exportToExcel(opts: {
   const notes = [
     query ? `Query: ${query}` : null,
     `Generated: ${timestamp()}`,
-    "Source: NHA SHA Analytical Co-pilot — synthetic PM-JAY data. Verify before use.",
+    "Source: NHA Analytics Co-Pilot — ABDM adoption data (prototype). Verify before use.",
   ].filter(Boolean) as string[];
   notes.forEach((text, i) => {
     const r = foot + i;

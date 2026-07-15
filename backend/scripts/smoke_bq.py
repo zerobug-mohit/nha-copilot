@@ -1,10 +1,10 @@
-"""BigQuery connectivity + read-only smoke test.
+"""BigQuery connectivity + read-only smoke test (ABDM).
 
 Run after populating .env:
     ./.venv/Scripts/python.exe scripts/smoke_bq.py
 
-Confirms the service account can read both tables, prints expected magnitudes,
-and verifies that a write statement is rejected (safety layer 3).
+Confirms the service account can read every ABDM table, prints expected
+magnitudes, and verifies that a write statement is rejected (safety layer 3).
 """
 from __future__ import annotations
 
@@ -18,9 +18,6 @@ from app.db.bigquery_client import get_bigquery_client  # noqa: E402
 
 settings = get_settings()
 bq = get_bigquery_client()
-tms = settings.table_ref("tms")
-bis = settings.table_ref("bis")
-merged = settings.table_ref("merged")
 
 
 def show(label: str, sql: str) -> None:
@@ -32,33 +29,28 @@ def show(label: str, sql: str) -> None:
 
 
 print(f"Project={settings.gcp_project} Dataset={settings.bq_dataset}")
-print("\n-- source tables --")
-show("TMS total rows", f"SELECT COUNT(*) AS n FROM {tms}")
-show("TMS unique patients", f"SELECT COUNT(DISTINCT member_id) AS patients FROM {tms}")
-show("BIS total rows", f"SELECT COUNT(*) AS n FROM {bis}")
-show(
-    "Brownfield check (should be ~0 TMS rows for Maharashtra)",
-    f"SELECT COUNT(*) AS n FROM {tms} WHERE UPPER(patient_state_name)='MAHARASTRA'",
-)
 
-print("\n-- merged table (what the app queries) --")
-show("Merged total rows", f"SELECT COUNT(*) AS n FROM {merged}")
+print("\n-- row counts per table --")
+for key in settings.table_map:
+    show(key, f"SELECT COUNT(*) AS n FROM {settings.table_ref(key)}")
+
+print("\n-- key activity metrics --")
+show("Distinct facilities", f"SELECT COUNT(DISTINCT hfr_id) AS facilities FROM {settings.table_ref('facility_registry')}")
+show("Facilities by ownership", f"SELECT facility_ownership, COUNT(DISTINCT hfr_id) n FROM {settings.table_ref('facility_registry')} GROUP BY facility_ownership")
+show("Total Scan & Share txns", f"SELECT SUM(counts) AS txns FROM {settings.table_ref('scan_share')}")
+show("Active facility-bridge links", f"SELECT COUNTIF(active='t') AS active_links FROM {settings.table_ref('linked_facility')}")
+show("Bridge status mix", f"SELECT status, COUNT(*) n FROM {settings.table_ref('bridge_integrator')} GROUP BY status")
+
+# ID-join sanity: hfr_id in scan_pay should match facility_registry (per §10).
 show(
-    "Merged distinct beneficiaries",
-    f"SELECT COUNT(DISTINCT card_no) AS beneficiaries FROM {merged}",
-)
-show(
-    "Merged rows WITH a claim",
-    f"SELECT COUNT(*) AS n FROM {merged} WHERE tms_case_id IS NOT NULL",
-)
-show(
-    "Merged Maharashtra beneficiaries have NO claims (paid should be NULL/0)",
-    f"SELECT COUNT(*) AS beneficiaries, "
-    f"COUNTIF(tms_case_id IS NOT NULL) AS with_claim "
-    f"FROM {merged} WHERE UPPER(state_name)='MAHARASTRA'",
+    "hfr_id join coverage (scan_pay -> facility_registry)",
+    f"""SELECT COUNT(*) AS scan_pay_rows,
+        COUNTIF(f.hfr_id IS NOT NULL) AS matched
+        FROM {settings.table_ref('scan_pay')} sp
+        LEFT JOIN {settings.table_ref('facility_registry')} f ON sp.hfr_id = f.hfr_id""",
 )
 
 # Read-only proof: a write must be refused by IAM even if it reaches BigQuery.
 print("\nAttempting a DELETE (must be refused by IAM/read-only role)...")
-res = bq.run_select(f"DELETE FROM {tms} WHERE 1=0")
+res = bq.run_select(f"DELETE FROM {settings.table_ref('facility_registry')} WHERE 1=0")
 print("  ->", "REFUSED as expected" if not res.ok else "!!! UNEXPECTEDLY ALLOWED")

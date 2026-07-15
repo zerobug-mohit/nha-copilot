@@ -11,27 +11,13 @@ from dataclasses import dataclass, field
 import sqlglot
 from sqlglot import exp
 
-# PII columns that must never be returned to a user (§4.4 step 2), across both
-# tables. Matched case-insensitively against any column referenced in output.
+# PII columns that must never be returned to a user. In the ABDM dataset,
+# facility identity (name/id/address) is PUBLIC dashboard data and is allowed;
+# the only patient-identifying column is `abha_address`, which is removed at the
+# data-prep stage. This is a hard backstop in case a future refresh reintroduces
+# it (or any obviously patient-identifying column). Matched case-insensitively.
 PII_COLUMNS = {
-    # TMS claim side (tms_-prefixed in the merged table; bare names kept too so
-    # the guard still fires if the two source tables are ever queried directly)
-    "tms_patient_name",
-    "tms_patient_dob",
-    "tms_patient_mobile_number",
-    "patient_name",
-    "patient_dob",
-    "patient_mobile_number",
-    # BIS beneficiary side (original names in the merged table)
-    "name",
-    "father_name",
-    "aadhaar_no",
-    "abha_id",
-    "ben_mobile_no",
-    "ben_email_id",
-    "ben_ref_id",
-    "date_of_birth",
-    "obj_aadhar_vault",
+    "abha_address",
 }
 
 # Statement types that are categorically rejected even if somehow parsed.

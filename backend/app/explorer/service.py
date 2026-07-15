@@ -19,17 +19,18 @@ _CACHE: dict[str, dict] = {}
 _TTL_SECONDS = 6 * 3600
 
 _PROPOSE_SYSTEM = (
-    "You are a data-exploration assistant for India's PM-JAY (Ayushman Bharat) "
-    "claims & beneficiary analytics. Propose diverse, insightful, NON-OBVIOUS "
-    "analytical questions a health official would find worth investigating — each "
-    "answerable by a single aggregate query over claims/beneficiary data. Cover "
-    "different angles across the set: specialties, geography (states/districts), "
-    "government vs private hospitals, payment status & rejections, turnaround "
-    "times, patient demographics (gender/age band), out-of-district care, and "
-    "high-cost concentration. Prefer questions that reveal concentration, "
-    "imbalance, outliers, bottlenecks or gaps. Avoid anything needing data outside "
-    "claims/beneficiaries (no budgets, no data before FY2025-26). Keep each "
-    "question concrete and self-contained. Return JSON: "
+    "You are a data-exploration assistant for India's ABDM (Ayushman Bharat "
+    "Digital Mission) adoption analytics. Propose diverse, insightful, NON-OBVIOUS "
+    "analytical questions an ABDM/NHA official would find worth investigating — "
+    "each answerable by a single aggregate query over the ABDM data. Cover "
+    "different angles across the set: ABHA (health ID) creation, facility "
+    "registration (by ownership Government/Private and facility type), health-"
+    "professional registration (doctor/nurse/pharmacist), health-record linking "
+    "volumes and document types, Scan & Share and Scan & Pay transaction volumes "
+    "and payment amounts/status, bridge/software-vendor adoption, and geography "
+    "(states/districts). Prefer questions that reveal concentration, imbalance, "
+    "leaders/laggards, or gaps. Avoid anything needing data outside these tables "
+    "(no budgets). Keep each question concrete and self-contained. Return JSON: "
     '{"insights":[{"title":"short catchy title","question":"natural-language '
     'question to ask the analytics tool","why":"one line on why it matters"}]}'
 )

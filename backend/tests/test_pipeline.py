@@ -20,37 +20,16 @@ class FakeLLM(LLMClient):
 def test_ambiguous_district_short_circuits_before_llm():
     # Should not need the LLM at all.
     set_llm_client(FakeLLM({"action": "sql", "sql": "SELECT 1"}))
-    r = pipeline.run_turn("Show me claims in Aurangabad", role="analyst")
+    r = pipeline.run_turn("Show me facilities in Aurangabad", role="analyst")
     assert r.action == "clarify"
     assert "aurangabad" in (r.message or "").lower()
 
 
-def test_brownfield_claims_out_of_scope():
+def test_ambiguous_district_offers_options():
     set_llm_client(FakeLLM({"action": "sql", "sql": "SELECT 1"}))
-    r = pipeline.run_turn("How many claims were paid in Maharashtra?", role="viewer")
-    assert r.action == "out_of_scope"
-    assert "not available" in (r.message or "").lower()
-
-
-def test_brownfield_beneficiary_is_allowed(monkeypatch):
-    # Registration question for a brownfield state must NOT be blocked.
-    set_llm_client(
-        FakeLLM(
-            {
-                "action": "sql",
-                "sql": "SELECT COUNT(*) AS n FROM `p.d.t_bis_beneficiary_dtl` "
-                "WHERE UPPER(state_name)='MAHARASTRA'",
-                "answer_template": "Registered beneficiaries in Maharashtra.",
-            }
-        )
-    )
-    fake_bq = type(
-        "BQ", (), {"run_select": lambda self, sql: QueryResult(columns=["n"], rows=[{"n": 42}], row_count=1)}
-    )()
-    monkeypatch.setattr(pipeline, "get_bigquery_client", lambda: fake_bq)
-    r = pipeline.run_turn("How many registered beneficiaries in Maharashtra?", role="analyst")
-    assert r.action == "answer"
-    assert r.rows == [{"n": 42}]
+    r = pipeline.run_turn("facilities in Aurangabad", role="analyst")
+    assert r.action == "clarify"
+    assert len(r.options) >= 2  # the alternative districts
 
 
 def test_full_success_path(monkeypatch):
@@ -58,23 +37,23 @@ def test_full_success_path(monkeypatch):
         FakeLLM(
             {
                 "action": "sql",
-                "sql": "SELECT COUNT(DISTINCT member_id) AS patients "
-                "FROM `p.d.claim_paid_excel_t` WHERE patient_state_code=24",
-                "answer_template": "Unique patients in Gujarat.",
+                "sql": "SELECT COUNT(DISTINCT hfr_id) AS facilities "
+                "FROM `p.d.health_facility_registry` WHERE state_code=24",
+                "answer_template": "Facilities registered in Gujarat.",
             }
         )
     )
     fake_bq = type(
-        "BQ", (), {"run_select": lambda self, sql: QueryResult(columns=["patients"], rows=[{"patients": 1000}], row_count=1)}
+        "BQ", (), {"run_select": lambda self, sql: QueryResult(columns=["facilities"], rows=[{"facilities": 1000}], row_count=1)}
     )()
     monkeypatch.setattr(pipeline, "get_bigquery_client", lambda: fake_bq)
     r = pipeline.run_turn(
-        "How many patients were treated in Gujarat in FY2025-26?",
+        "How many facilities are registered in Gujarat?",
         role="analyst",
         today=date(2026, 7, 6),
     )
     assert r.action == "answer"
-    assert r.sql and "COUNT(DISTINCT member_id)" in r.sql
+    assert r.sql and "COUNT(DISTINCT hfr_id)" in r.sql
     assert r.context_chips.get("geography", "").lower().startswith("gujarat")
 
 
@@ -83,27 +62,20 @@ def test_llm_clarify_passes_options_through():
         FakeLLM(
             {
                 "action": "clarify",
-                "message": "Do you want cases or amount paid?",
-                "options": ["Number of cases", "Total amount paid"],
+                "message": "By which measure?",
+                "options": ["Registration count", "Scan & Share volume"],
             }
         )
     )
-    r = pipeline.run_turn("show me the top hospitals", role="analyst")
+    r = pipeline.run_turn("show me the top facilities", role="analyst")
     assert r.action == "clarify"
-    assert r.options == ["Number of cases", "Total amount paid"]
-
-
-def test_ambiguous_district_offers_options():
-    set_llm_client(FakeLLM({"action": "sql", "sql": "SELECT 1"}))
-    r = pipeline.run_turn("claims in Aurangabad", role="analyst")
-    assert r.action == "clarify"
-    assert len(r.options) >= 2  # the alternative districts
+    assert r.options == ["Registration count", "Scan & Share volume"]
 
 
 def test_analyze_results_parses():
-    fake = FakeLLM({"summary": "Gujarat leads.", "insights": ["A", "B"], "trends": []})
-    out = pipeline.analyze_results("q", ["state", "n"], [{"state": "GJ", "n": 5}, {"state": "UP", "n": 3}], fake)
-    assert out["summary"] == "Gujarat leads."
+    fake = FakeLLM({"summary": "Bihar leads.", "insights": ["A", "B"], "trends": []})
+    out = pipeline.analyze_results("q", ["state", "n"], [{"state": "BR", "n": 5}, {"state": "AP", "n": 3}], fake)
+    assert out["summary"] == "Bihar leads."
     assert out["insights"] == ["A", "B"]
     assert out["trends"] == []
 
@@ -118,11 +90,11 @@ def test_pii_sql_is_rejected(monkeypatch):
         FakeLLM(
             {
                 "action": "sql",
-                "sql": "SELECT patient_name FROM `p.d.claim_paid_excel_t` LIMIT 5",
-                "answer_template": "names",
+                "sql": "SELECT abha_address FROM `p.d.scan_pay_count` LIMIT 5",
+                "answer_template": "addresses",
             }
         )
     )
-    r = pipeline.run_turn("List patient names in Gujarat", role="admin")
+    r = pipeline.run_turn("List patient ABHA addresses", role="admin")
     assert r.action == "error"
     assert r.execution_status == "rejected"

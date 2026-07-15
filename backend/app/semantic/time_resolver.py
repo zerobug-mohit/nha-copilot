@@ -1,8 +1,8 @@
 """Natural-language time reference resolution.
 
-Converts phrases like "last quarter", "Q2 2023-24", "since the scheme started"
-into explicit [start, end) date ranges. Also knows the prototype's TMS data
-window (FY2025-26) and flags requests that fall outside it.
+Converts phrases like "last quarter", "Q2 2025-26", "last month" into explicit
+[start, end) date ranges. Also knows the ABDM prototype's overall data window and
+flags requests that fall entirely outside it.
 
 Dates are resolved relative to a supplied `today` (defaults to the real current
 date) so the module is deterministic in tests.
@@ -13,11 +13,12 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
-# AB PM-JAY national launch date.
-SCHEME_START = date(2018, 9, 23)
-# Prototype TMS data window.
-TMS_WINDOW_START = date(2025, 4, 1)
-TMS_WINDOW_END = date(2026, 4, 1)  # exclusive upper bound
+# ABDM prototype data window (broadest span across all tables; scan_pay_count
+# reaches back to 2024-07-26, the rest start 2026-01-01, all end ~2026-07-10).
+# The model knows the precise per-table ranges from CLAUDE.md §10; this is a
+# coarse "is the whole ask before/after any data exists" guard.
+DATA_WINDOW_START = date(2024, 7, 1)
+DATA_WINDOW_END = date(2026, 7, 11)  # exclusive upper bound
 
 
 @dataclass
@@ -26,7 +27,7 @@ class TimeResolution:
     start: date | None = None
     end: date | None = None  # exclusive
     label: str | None = None
-    outside_tms_window: bool = False
+    outside_data_window: bool = False
     note: str | None = None
 
 
@@ -78,10 +79,6 @@ class TimeResolver:
             y = int(m.group(1))
             return self._finalize(date(y, 1, 1), date(y + 1, 1, 1), str(y))
 
-        if "since the scheme" in t or "scheme started" in t or "scheme launch" in t:
-            return self._finalize(SCHEME_START, date(today.year + 1, 1, 1),
-                                  "since scheme launch (2018-09-23)")
-
         if "last year" in t or "previous year" in t:
             start, end = _fy_range(today.year - 1 if today.month >= 4 else today.year - 2)
             return self._finalize(start, end, "last financial year")
@@ -107,21 +104,21 @@ class TimeResolver:
         return TimeResolution(status="none")
 
     def _finalize(self, start: date, end: date, label: str) -> TimeResolution:
-        # Overlap check against the TMS window.
-        outside = end <= TMS_WINDOW_START or start >= TMS_WINDOW_END
+        # Overlap check against the overall ABDM data window.
+        outside = end <= DATA_WINDOW_START or start >= DATA_WINDOW_END
         note = None
         if outside:
             note = (
-                f"The requested period ({label}) is outside the prototype TMS data "
-                f"window (FY2025-26). Claims data is only available for "
-                f"1 Apr 2025 – 31 Mar 2026."
+                f"The requested period ({label}) is outside the available data "
+                f"window. Most ABDM tables cover Jan–Jul 2026 (Scan & Pay reaches "
+                f"back to mid-2024); there is no data beyond mid-July 2026."
             )
         return TimeResolution(
             status="resolved",
             start=start,
             end=end,
             label=label,
-            outside_tms_window=outside,
+            outside_data_window=outside,
             note=note,
         )
 

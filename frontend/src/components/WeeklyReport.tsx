@@ -2,8 +2,8 @@ import { useState } from "react";
 import { fetchWeeklyReport } from "../api";
 import { buildWeeklyReport } from "../lib/reportPptx";
 
-const WINDOW_MIN = "2025-04-01";
-const WINDOW_MAX = "2026-03-31";
+const WINDOW_MIN = "2026-01-01";
+const WINDOW_MAX = "2026-07-10";
 
 function fmtISO(d: Date): string {
   const y = d.getFullYear();
@@ -28,7 +28,7 @@ function human(d: Date): string {
 
 export default function WeeklyReport({ token }: { token: string }) {
   const [open, setOpen] = useState(false);
-  const [pick, setPick] = useState("2025-10-06");
+  const [pick, setPick] = useState("2026-06-01");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,8 +42,12 @@ export default function WeeklyReport({ token }: { token: string }) {
     setError(null);
     try {
       const report = await fetchWeeklyReport(token, start, endExclusive);
-      if (!report.kpis || report.kpis.total_claims === 0) {
-        setError("No claims found for this week. Pick a week within 1 Apr 2025 – 31 Mar 2026.");
+      const k = report.kpis;
+      const activity = k
+        ? k.abha_created + k.records_linked + k.scan_share_txns + k.scan_pay_txns + k.facilities_verified
+        : 0;
+      if (!k || activity === 0) {
+        setError("No ABDM activity found for this week. Pick a week within Jan–Jul 2026.");
         return;
       }
       await buildWeeklyReport(report);
@@ -88,7 +92,7 @@ export default function WeeklyReport({ token }: { token: string }) {
             <div className="mt-2 rounded bg-brand-light px-2 py-1.5 text-[12px] text-brand-dark">
               {human(monday)} – {human(sunday)}
             </div>
-            <p className="mt-1 text-[10px] text-ink-faint">Data available: 1 Apr 2025 – 31 Mar 2026.</p>
+            <p className="mt-1 text-[10px] text-ink-faint">Data available: Jan – Jul 2026 (Scan & Share / linking from Apr 2026).</p>
             {error && <div className="mt-2 rounded border border-danger-border bg-danger-bg px-2 py-1 text-[11px] text-danger">{error}</div>}
             <button
               onClick={generate}

@@ -77,7 +77,7 @@ export async function exportChartToPptx(opts: {
   // Footnote
   const notes = [
     query ? `Query: ${query}` : "",
-    `Generated: ${timestamp()}  •  NHA SHA Analytical Co-pilot (synthetic PM-JAY data)`,
+    `Generated: ${timestamp()}  •  NHA Analytics Co-Pilot (ABDM adoption data)`,
   ].filter(Boolean).join("\n");
   slide.addText(notes, {
     x: 0.5, y: 6.7, w: 12.3, h: 0.6,

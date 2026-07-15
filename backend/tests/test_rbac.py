@@ -1,66 +1,53 @@
 from app.sql_safety.rbac_filter import check_rbac
 
-TMS = "`p.d.claim_paid_excel_t`"
+FAC = "`p.d.health_facility_registry`"
 
 
 def _sql(cols, group=None):
     g = f" GROUP BY {group}" if group else ""
-    return f"SELECT {cols} FROM {TMS}{g}"
+    return f"SELECT {cols} FROM {FAC}{g}"
 
 
 def test_viewer_blocked_on_district():
-    r = check_rbac(_sql("patient_district_name, COUNT(*) c", "patient_district_name"), "viewer")
+    r = check_rbac(_sql("district_name, COUNT(*) c", "district_name"), "viewer")
     assert not r.allowed
 
 
 def test_viewer_allowed_state_level():
-    r = check_rbac(_sql("patient_state_name, COUNT(*) c", "patient_state_name"), "viewer")
+    r = check_rbac(_sql("state_code, COUNT(*) c", "state_code"), "viewer")
     assert r.allowed
 
 
 def test_analyst_allowed_district():
-    r = check_rbac(_sql("patient_district_name, COUNT(*) c", "patient_district_name"), "analyst")
+    r = check_rbac(_sql("district_code, COUNT(*) c", "district_code"), "analyst")
     assert r.allowed
 
 
-def test_analyst_blocked_on_hospital():
-    r = check_rbac(_sql("hospital_name, COUNT(*) c", "hospital_name"), "analyst")
+def test_analyst_blocked_on_facility_listing():
+    r = check_rbac(_sql("facility_name, COUNT(*) c", "facility_name"), "analyst")
     assert not r.allowed
 
 
-def test_senior_allowed_hospital():
-    r = check_rbac(_sql("hospital_name, COUNT(*) c", "hospital_name"), "senior_analyst")
+def test_analyst_allowed_facility_count_by_id():
+    # COUNT(DISTINCT hfr_id) is the standard facility count — allowed at every tier.
+    r = check_rbac(_sql("state_code, COUNT(DISTINCT hfr_id) AS n", "state_code"), "analyst")
+    assert r.allowed
+
+
+def test_senior_allowed_facility():
+    r = check_rbac(_sql("facility_name, registered_count", None), "senior_analyst")
     assert r.allowed
 
 
 def test_admin_allowed_everything():
-    r = check_rbac(_sql("hospital_code, patient_district_name"), "admin")
+    r = check_rbac(_sql("facility_name, hfr_id, district_name"), "admin")
     assert r.allowed
 
 
-# --- merged-table schema (tms_-prefixed claim columns) ---
-MERGED = "`p.d.BIS_TMS_Sample_Merged`"
-
-
-def test_analyst_blocked_on_merged_hospital():
+def test_viewer_blocked_on_numeric_district_column():
+    # `district` (numeric LGD code column in linked_facility / scan_pay_count)
     r = check_rbac(
-        f"SELECT tms_hospital_name, COUNT(*) c FROM {MERGED} GROUP BY tms_hospital_name",
-        "analyst",
-    )
-    assert not r.allowed
-
-
-def test_viewer_blocked_on_merged_district():
-    r = check_rbac(
-        f"SELECT dist_name, COUNT(DISTINCT card_no) n FROM {MERGED} GROUP BY dist_name",
+        "SELECT district, COUNT(*) c FROM `p.d.scan_pay_count` GROUP BY district",
         "viewer",
     )
     assert not r.allowed
-
-
-def test_viewer_allowed_merged_state():
-    r = check_rbac(
-        f"SELECT state_name, COUNT(DISTINCT card_no) n FROM {MERGED} GROUP BY state_name",
-        "viewer",
-    )
-    assert r.allowed

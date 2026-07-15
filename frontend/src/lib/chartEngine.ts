@@ -29,34 +29,24 @@ export const MAX_LABELS = 16; // direct value labels only up to this many bars
 export const LONG_LABEL = 10; // a category label longer than this counts as "long"
 export const OTHER = "Other";
 
-// ---- Value → friendly label maps ----
-const SPECIALTY: Record<string, string> = {
-  BM: "Burns Management", ER: "Emergency Room", MC: "Cardiology", MG: "General Medicine",
-  MM: "Mental Disorders", MN: "Neo-natal Care", MO: "Medical Oncology", MR: "Radiation Oncology",
-  SB: "Orthopedics", SC: "Surgical Oncology", SE: "Ophthalmology", SG: "General Surgery",
-  SL: "ENT", SM: "Oral & Maxillofacial", SN: "Neurosurgery", SO: "Obstetrics & Gynaecology",
-  SP: "Plastic & Reconstructive", SS: "Pediatric Surgery", ST: "Polytrauma", SU: "Urology",
-  SV: "CTVS", MD: "Dermatology", SD: "Dental",
-};
+// ---- Value → friendly label maps (ABDM domain) ----
+// Per-column coded-value maps. Keyed by lowercased column name.
 const COLUMN_MAPS: Record<string, Record<string, string>> = {
-  hospital_type: { P: "Private", G: "Government" }, tms_hospital_type: { P: "Private", G: "Government" },
-  rural_urban_flag: { U: "Urban", R: "Rural" }, gender: { M: "Male", F: "Female" },
-  tms_gender: { M: "Male", F: "Female" }, admission_type: { E: "Emergency", P: "Planned" },
-  tms_admission_type: { E: "Emergency", P: "Planned" }, discharge_type: { N: "Normal", D: "Death" },
-  tms_discharge_type: { N: "Normal", D: "Death" }, new_member_flag: { Y: "Yes", N: "No" },
+  hpr_type: { d: "Doctor", n: "Nurse", p: "Pharmacist", D: "Doctor", N: "Nurse", P: "Pharmacist" },
+  active: { t: "Active", f: "Inactive", true: "Active", false: "Inactive" },
+  // facility_ownership / partner_ownership are coded G/P/PP (unlike `ownership`
+  // and facility_ownership_desc, which are already full text).
+  facility_ownership: { G: "Government", P: "Private", PP: "Public-Private" },
+  partner_ownership: { G: "Government", P: "Private", PP: "Public-Private" },
 };
+// Heuristic value-set detection for coded columns whose name we don't recognise.
 const VALUE_SETS: { sig: string[]; keys: string[]; map: Record<string, string> }[] = [
-  { sig: ["U", "R"], keys: ["U", "R"], map: { U: "Urban", R: "Rural" } },
-  { sig: ["M", "F"], keys: ["M", "F"], map: { M: "Male", F: "Female" } },
-  { sig: ["G"], keys: ["G", "P"], map: { G: "Government", P: "Private" } },
-  { sig: ["E"], keys: ["E", "P"], map: { E: "Emergency", P: "Planned" } },
-  { sig: ["D"], keys: ["N", "D"], map: { N: "Normal", D: "Death" } },
-  { sig: ["Y"], keys: ["Y", "N"], map: { Y: "Yes", N: "No" } },
+  { sig: ["d", "n", "p"], keys: ["d", "n", "p"], map: { d: "Doctor", n: "Nurse", p: "Pharmacist" } },
+  { sig: ["t", "f"], keys: ["t", "f"], map: { t: "Active", f: "Inactive" } },
 ];
 
 export function makeLabeler(col: string, values: unknown[]): (v: unknown) => string {
   const cl = (col || "").toLowerCase();
-  if (cl.includes("special")) return (v) => (v === OTHER ? OTHER : SPECIALTY[String(v)] ?? String(v ?? "—"));
   if (COLUMN_MAPS[cl]) { const m = COLUMN_MAPS[cl]; return (v) => (v === OTHER ? OTHER : m[String(v)] ?? String(v ?? "—")); }
   const set = new Set(values.filter((v) => v != null && v !== "").map(String));
   for (const vs of VALUE_SETS) {
@@ -64,7 +54,7 @@ export function makeLabeler(col: string, values: unknown[]): (v: unknown) => str
       const m = vs.map; return (v) => (v === OTHER ? OTHER : m[String(v)] ?? String(v ?? "—"));
     }
   }
-  return (v) => (v === OTHER ? OTHER : SPECIALTY[String(v)] ?? String(v ?? "—"));
+  return (v) => (v === OTHER ? OTHER : String(v ?? "—"));
 }
 
 export const pretty = (s: string) => {

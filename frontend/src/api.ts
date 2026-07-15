@@ -46,7 +46,7 @@ export async function login(username: string, password: string): Promise<LoginRe
   return res.json();
 }
 
-interface Delta {
+export interface Delta {
   prev: number;
   change: number;
   pct: number | null;
@@ -54,39 +54,31 @@ interface Delta {
 export interface WeeklyReport {
   period: { start: string; end: string };
   kpis: {
-    total_claims: number;
-    unique_patients: number;
-    paid_claims: number;
-    pending_claims: number;
-    rejected_claims: number;
-    total_paid: number;
-    avg_paid_per_claim: number;
-    paid_rate: number;
+    abha_created: number;
+    facilities_verified: number;
+    hpr_verified: number;
+    records_linked: number;
+    scan_share_txns: number;
+    scan_pay_txns: number;
+    scan_pay_amount: number;
+    active_facility_links: number;
     states_covered: number;
-    hospitals_active: number;
-    wow: { claims: Delta; patients: Delta; paid: Delta };
+    wow: {
+      abha_created: Delta;
+      records_linked: Delta;
+      scan_share_txns: Delta;
+      scan_pay_txns: Delta;
+    };
   };
-  by_gender: { gender: string; claims: number; patients: number }[];
-  by_age: { age_band: string; claims: number }[];
-  by_specialty: { specialty: string; specialty_name?: string; claims: number; paid: number }[];
-  by_state: { state: string; claims: number; paid: number }[];
-  financial: {
-    total_paid: number;
-    total_approved: number;
-    approved_unpaid_amount: number;
-    approved_unpaid_count: number;
-    avg_paid_per_claim: number;
-  };
-  tat: { stage: string; median: number; p90: number }[];
-  by_status: { status: string; claims: number }[];
-  pending_by_stage: { stage: string; claims: number }[];
-  by_hospital_type: { hospital_type: string; claims: number; paid: number }[];
-  portability: { portability: string; claims: number }[];
-  bis: {
-    new_enrollments: number;
-    total_registered: number;
-    card_status: { card_status: string; count: number }[];
-  };
+  abha_by_state: { state: string; abha_created: number }[];
+  scan_share_by_state: { state: string; transactions: number }[];
+  linked_by_state: { state: string; records_linked: number }[];
+  facilities_by_ownership: { ownership: string; facilities: number }[];
+  facilities_by_type: { facility_type: string; facilities: number }[];
+  hpr_by_type: { hpr_type: string; professionals: number }[];
+  scan_pay_by_status: { payment_status: string; records: number; amount: number }[];
+  links_by_bridge: { bridge_name: string; active_links: number }[];
+  bridge_by_status: { status: string; bridges: number }[];
   analysis: { summary?: string; insights?: string[]; trends?: string[] } | null;
 }
 

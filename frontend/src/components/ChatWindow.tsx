@@ -7,10 +7,10 @@ import MessageBubble, { type ChatMessage } from "./MessageBubble";
 import WeeklyReport from "./WeeklyReport";
 
 const SUGGESTIONS = [
-  "How many claims were paid, and the total amount?",
-  "Registered beneficiaries by state",
-  "Break down claims by rural vs urban",
-  "Gujarat mein kitne claims paid huye?",
+  "How many facilities are registered by ownership type?",
+  "Scan & Share transactions by state",
+  "Top bridges by active facility links",
+  "Bihar mein kitne ABHA banaye gaye?",
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -107,7 +107,7 @@ export default function ChatWindow({
               NHA Analytics Co-Pilot
             </h1>
             <p className="text-[11px] leading-tight text-ink-faint">
-              PM-JAY claims &amp; beneficiary analytics
+              ABDM digital-adoption analytics
             </p>
           </div>
         </div>
@@ -157,8 +157,8 @@ export default function ChatWindow({
             <div className="rounded-lg border border-line bg-surface p-5 shadow-soft">
               <h2 className="text-sm font-semibold text-ink">Ask a question</h2>
               <p className="mt-1 text-[13px] text-ink-muted">
-                Plain English works — the co-pilot picks the right data
-                (claims, beneficiaries, or both) and shows the SQL it used.
+                Plain English works — the co-pilot picks the right ABDM data
+                (registrations, ABHA, linking, or transactions) and shows the SQL it used.
               </p>
               <div className="mt-4 grid gap-2">
                 {SUGGESTIONS.map((s) => (
@@ -257,7 +257,7 @@ export default function ChatWindow({
           </button>
         </form>
         <p className="mt-1.5 text-center text-[10px] text-ink-faint">
-          Answers are generated from synthetic PM-JAY data. Verify the SQL before acting on results.
+          Answers are generated from ABDM adoption data (prototype). Verify the SQL before acting on results.
         </p>
       </footer>
         </div>

@@ -1,7 +1,7 @@
 """Builds the system prompt (CLAUDE.md) and the per-turn user prompt.
 
-CLAUDE.md is loaded once and cached. The `{TMS_TABLE}` / `{BIS_TABLE}`
-placeholders are replaced with the fully-qualified, backtick-quoted table refs
+CLAUDE.md is loaded once and cached. The `{..._TABLE}` placeholders (one per
+ABDM table) are replaced with the fully-qualified, backtick-quoted table refs
 from config so the governance doc stays deployment-agnostic.
 """
 from __future__ import annotations
@@ -15,15 +15,27 @@ from app.config import BACKEND_DIR, get_settings
 CLAUDE_MD_PATH = BACKEND_DIR / "CLAUDE.md"
 
 
+# CLAUDE.md placeholder -> table_map key.
+_PLACEHOLDERS = {
+    "{FACILITY_REGISTRY_TABLE}": "facility_registry",
+    "{PROFESSIONALS_REGISTRY_TABLE}": "professionals_registry",
+    "{TOP_INDICATORS_TABLE}": "top_indicators",
+    "{LINKED_TREND_TABLE}": "linked_trend",
+    "{LINKED_FACILITY_TABLE}": "linked_facility",
+    "{SCAN_SHARE_TABLE}": "scan_share",
+    "{SCAN_PAY_TABLE}": "scan_pay",
+    "{STATE_DISTRICT_MASTER_TABLE}": "state_district_master",
+    "{BRIDGE_INTEGRATOR_TABLE}": "bridge_integrator",
+}
+
+
 @lru_cache
 def _load_claude_md() -> str:
     settings = get_settings()
     text = Path(CLAUDE_MD_PATH).read_text(encoding="utf-8")
-    return (
-        text.replace("{MERGED_TABLE}", settings.table_ref("merged"))
-        .replace("{TMS_TABLE}", settings.table_ref("tms"))
-        .replace("{BIS_TABLE}", settings.table_ref("bis"))
-    )
+    for placeholder, key in _PLACEHOLDERS.items():
+        text = text.replace(placeholder, settings.table_ref(key))
+    return text
 
 
 def load_system_prompt() -> str:
@@ -58,7 +70,7 @@ def build_user_prompt(
     parts.append(f"CALLER ROLE: {role}")
     parts.append(
         "ROLE ACCESS: viewer=national/state aggregates; analyst=+district; "
-        "senior_analyst=+hospital (aggregated); admin=all. Generate SQL within "
+        "senior_analyst=+facility-level detail; admin=all. Generate SQL within "
         "the caller's access level."
     )
 

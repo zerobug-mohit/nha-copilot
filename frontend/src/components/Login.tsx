@@ -35,7 +35,7 @@ export default function Login({
           </div>
           <h1 className="text-xl font-semibold text-ink">NHA Analytics Co-Pilot</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Ask PM-JAY claims &amp; beneficiary data in natural language.
+            Ask ABDM digital-adoption data in natural language.
           </p>
         </div>
 

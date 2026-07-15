@@ -37,11 +37,11 @@ describe("single-measure ranking (claims by state)", () => {
   });
 });
 
-describe("small categorical breakdown (rural vs urban)", () => {
-  const spec: ChartSpecLike = { type: "bar", x: "rural_urban_flag", series: ["claim_count"] };
+describe("small categorical breakdown (facility link active flag)", () => {
+  const spec: ChartSpecLike = { type: "bar", x: "active", series: ["facilities"] };
   const data = rows(
-    { rural_urban_flag: "R", claim_count: 140 },
-    { rural_urban_flag: "U", claim_count: 60 },
+    { active: "t", facilities: 2900 },
+    { active: "f", facilities: 48 },
   );
   const r = resolveChart(spec, data);
 
@@ -51,8 +51,8 @@ describe("small categorical breakdown (rural vs urban)", () => {
     expect(r.layout.showLabels).toBe(true);
   });
   it("humanizes coded values on the axis", () => {
-    expect(r.analysis.fl("R")).toBe("Rural");
-    expect(r.analysis.fl("U")).toBe("Urban");
+    expect(r.analysis.fl("t")).toBe("Active");
+    expect(r.analysis.fl("f")).toBe("Inactive");
   });
 });
 
@@ -75,14 +75,14 @@ describe("time series (monthly amount paid)", () => {
   });
 });
 
-describe("grouped two-dimension (state × hospital_type)", () => {
-  const spec: ChartSpecLike = { type: "bar", x: "state", series: ["claim_count"] };
-  const cols = ["state", "hospital_type", "claim_count"];
+describe("grouped two-dimension (state × facility ownership)", () => {
+  const spec: ChartSpecLike = { type: "bar", x: "state", series: ["facilities"] };
+  const cols = ["state", "facility_ownership", "facilities"];
   const data = rows(
-    { state: "GUJARAT", hospital_type: "G", claim_count: 40 },
-    { state: "GUJARAT", hospital_type: "P", claim_count: 60 },
-    { state: "BIHAR", hospital_type: "G", claim_count: 30 },
-    { state: "BIHAR", hospital_type: "P", claim_count: 20 },
+    { state: "GUJARAT", facility_ownership: "Government", facilities: 40 },
+    { state: "GUJARAT", facility_ownership: "Private", facilities: 60 },
+    { state: "BIHAR", facility_ownership: "Government", facilities: 30 },
+    { state: "BIHAR", facility_ownership: "Private", facilities: 20 },
   );
   const r = resolveChart(spec, data, cols);
 
@@ -98,8 +98,8 @@ describe("grouped two-dimension (state × hospital_type)", () => {
   });
   it("aggregates each cell correctly", () => {
     const guj = r.chartData.find((d) => d.state === "GUJARAT")!;
-    expect(guj.G).toBe(40);
-    expect(guj.P).toBe(60);
+    expect(guj.Government).toBe(40);
+    expect(guj.Private).toBe(60);
   });
 });
 
@@ -230,23 +230,25 @@ describe("compact number formatting (currency in Cr/L/k)", () => {
 });
 
 describe("value humanization by column / value-set", () => {
-  it("maps specialty codes", () => {
-    const f = makeLabeler("speciality_code", ["MC", "SG"]);
-    expect(f("MC")).toBe("Cardiology");
-    expect(f("SG")).toBe("General Surgery");
+  it("maps HPR type codes", () => {
+    const f = makeLabeler("hpr_type", ["d", "n", "p"]);
+    expect(f("d")).toBe("Doctor");
+    expect(f("n")).toBe("Nurse");
+    expect(f("p")).toBe("Pharmacist");
   });
-  it("maps gender and preserves Other", () => {
-    const f = makeLabeler("gender", ["M", "F"]);
-    expect(f("M")).toBe("Male");
+  it("maps the active flag and preserves Other", () => {
+    const f = makeLabeler("active", ["t", "f"]);
+    expect(f("t")).toBe("Active");
+    expect(f("f")).toBe("Inactive");
     expect(f(OTHER)).toBe(OTHER);
   });
-  it("infers Rural/Urban from the value set even without a known column name", () => {
-    const f = makeLabeler("flag_x", ["R", "U"]);
-    expect(f("R")).toBe("Rural");
-    expect(f("U")).toBe("Urban");
+  it("infers doctor/nurse/pharmacist from the value set even without a known column name", () => {
+    const f = makeLabeler("type_x", ["d", "n", "p"]);
+    expect(f("d")).toBe("Doctor");
+    expect(f("p")).toBe("Pharmacist");
   });
   it("pretty-prints snake_case column names", () => {
-    expect(pretty("claim_count")).toBe("Claim count");
+    expect(pretty("record_linked_count")).toBe("Record linked count");
   });
 });
 

@@ -26,10 +26,18 @@ class Settings(BaseSettings):
     # BigQuery
     gcp_project: str = "nha-conversational-analytics"
     bq_dataset: str = "nha_conversational_analytics"
-    bq_tms_table: str = "TMS_Sample"
-    bq_bis_table: str = "BIS_Updated_Sample"
-    # Single denormalised table the co-pilot queries (BIS LEFT JOIN TMS).
-    bq_merged_table: str = "BIS_TMS_Sample_Merged"
+    # ABDM digital-adoption tables (no merged table — joined by facility ID /
+    # geography, see CLAUDE.md §10). Override any of these via the env if the
+    # loaded table names differ.
+    bq_facility_registry_table: str = "health_facility_registry"
+    bq_professionals_registry_table: str = "health_professionals_registry"
+    bq_top_indicators_table: str = "healthid_top_indicators"
+    bq_linked_trend_table: str = "healthid_linked_trend"
+    bq_linked_facility_table: str = "linked_facility"
+    bq_scan_share_table: str = "scan_and_share"
+    bq_scan_pay_table: str = "scan_pay_count"
+    bq_state_district_master_table: str = "state_district_master"
+    bq_bridge_integrator_table: str = "integrator_detail"
     # Auth to BigQuery — provide EITHER of these (inline JSON takes precedence):
     #   google_credentials_json : the full service-account key JSON, inline
     #   google_application_credentials : a path to the key file
@@ -71,13 +79,26 @@ class Settings(BaseSettings):
             p = (BACKEND_DIR / p).resolve()
         return p
 
+    # Maps the CLAUDE.md placeholder keys to the configured table names. The keys
+    # here match the {..._TABLE} placeholders substituted in prompt_builder.
+    @property
+    def table_map(self) -> dict[str, str]:
+        return {
+            "facility_registry": self.bq_facility_registry_table,
+            "professionals_registry": self.bq_professionals_registry_table,
+            "top_indicators": self.bq_top_indicators_table,
+            "linked_trend": self.bq_linked_trend_table,
+            "linked_facility": self.bq_linked_facility_table,
+            "scan_share": self.bq_scan_share_table,
+            "scan_pay": self.bq_scan_pay_table,
+            "state_district_master": self.bq_state_district_master_table,
+            "bridge_integrator": self.bq_bridge_integrator_table,
+        }
+
     def table_ref(self, which: str) -> str:
-        """Fully qualified, backtick-quoted BigQuery table reference."""
-        table = {
-            "tms": self.bq_tms_table,
-            "bis": self.bq_bis_table,
-            "merged": self.bq_merged_table,
-        }.get(which, self.bq_merged_table)
+        """Fully qualified, backtick-quoted BigQuery table reference for a
+        table_map key (e.g. 'facility_registry')."""
+        table = self.table_map.get(which, self.bq_facility_registry_table)
         return f"`{self.gcp_project}.{self.bq_dataset}.{table}`"
 
 

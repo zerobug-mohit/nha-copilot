@@ -1,14 +1,12 @@
 """The per-turn NL-to-SQL orchestration pipeline (§4.3).
 
-1. Geography / period / specialty resolution (semantic layer)
-2. Deterministic short-circuits (ambiguous district, brownfield claims) -> clarify/out-of-scope
+1. Geography / period resolution (semantic layer)
+2. Deterministic short-circuits (ambiguous district) -> clarify
 3. Context injection + LLM SQL generation
 4. SQL safety validation (SELECT-only, PII)
 5. RBAC granularity check
-6. Read-only execution against BigQuery
-7. Response formatting
-
-No automatic retry on execution error: catch, log, return a safe failure message.
+6. Read-only execution against BigQuery (one corrective retry on error)
+7. Response formatting + analysis
 """
 from __future__ import annotations
 
@@ -21,7 +19,6 @@ from app.db.bigquery_client import get_bigquery_client
 from app.nl_to_sql.client import get_llm_client
 from app.nl_to_sql.prompt_builder import build_user_prompt, load_system_prompt
 from app.semantic.geography import get_geography
-from app.semantic.synonyms import get_synonyms
 from app.semantic.time_resolver import get_time_resolver
 from app.sql_safety.rbac_filter import check_rbac
 from app.sql_safety.validator import validate_sql
@@ -32,16 +29,6 @@ FAILURE_MESSAGE = (
     "I was unable to answer that question. This has been logged for review. "
     "You could try rephrasing, or ask for a broader aggregate which I can "
     "answer reliably."
-)
-
-_CLAIM_INTENT = (
-    "claim", "claims", "paid", "payment", "treatment", "treated", "admission",
-    "admitted", "procedure", "surgery", "discharge", "preauth", "hospitalis",
-    "hospitaliz", "tat", "case", "cases",
-)
-_BENEFICIARY_INTENT = (
-    "beneficiar", "registered", "registration", "enrol", "enroll", "card",
-    "aadhaar", "abha", "household", "family", "member",
 )
 
 
@@ -64,19 +51,12 @@ class TurnResult:
     error_message: str | None = None
 
 
-def _has_intent(text: str, terms: tuple[str, ...]) -> bool:
-    t = text.lower()
-    return any(term in t for term in terms)
-
-
 def resolve_entities(question: str, today: date | None = None) -> dict[str, Any]:
     geo = get_geography()
     time_r = get_time_resolver()
-    syn = get_synonyms()
 
     geo_hits = geo.detect(question)
     time_res = time_r.resolve(question, today=today)
-    spec_hits = syn.match(question)
 
     resolved: dict[str, Any] = {
         "geography": [
@@ -86,7 +66,6 @@ def resolve_entities(question: str, today: date | None = None) -> dict[str, Any]
                 "name": m.name,
                 "state_code": m.state_code,
                 "state_name": m.state_name,
-                "is_brownfield": m.is_brownfield,
                 "name_in_data": m.name_in_data,
                 "status": r.status,
                 "clarify": r.message,
@@ -99,16 +78,13 @@ def resolve_entities(question: str, today: date | None = None) -> dict[str, Any]
             r.message for r in geo_hits if r.status == "ambiguous"
         ],
         "period": None,
-        "specialties": [
-            {"phrase": s.phrase, "codes": s.codes, "names": s.names} for s in spec_hits
-        ],
     }
     if time_res.status == "resolved":
         resolved["period"] = {
             "start": time_res.start.isoformat(),
             "end": time_res.end.isoformat(),
             "label": time_res.label,
-            "outside_tms_window": time_res.outside_tms_window,
+            "outside_data_window": time_res.outside_data_window,
             "note": time_res.note,
         }
     return resolved
@@ -137,24 +113,6 @@ def run_turn(
             action="clarify",
             message=resolved["ambiguous_geography"][0],
             options=alt,
-            resolved=resolved,
-        )
-
-    claim_intent = _has_intent(question, _CLAIM_INTENT)
-    beneficiary_intent = _has_intent(question, _BENEFICIARY_INTENT)
-    brownfield = [g for g in resolved["geography"] if g.get("is_brownfield")]
-    if brownfield and claim_intent and not beneficiary_intent:
-        names = ", ".join(sorted({g["state_name"] or g["name"] for g in brownfield}))
-        return TurnResult(
-            action="out_of_scope",
-            message=(
-                f"Claims data is not available for {names} in this system. These "
-                "states run their own SHA trust-model claims systems outside this "
-                "prototype's scope, so a claims figure here would be misleading "
-                "(it is not zero — it is simply not present). I can answer "
-                "registered-beneficiary questions for these states, or claims for "
-                "the states that do report here."
-            ),
             resolved=resolved,
         )
 
@@ -268,10 +226,12 @@ def _retry_sql(llm, system_prompt, user_prompt, bad_sql, error, role):
         user_prompt
         + "\n\nYOUR PREVIOUS SQL FAILED. Fix it and return the SAME JSON (action=sql).\n"
         + f"Failed SQL:\n{bad_sql}\n\nBigQuery error:\n{error}\n\n"
-        + "Check exact column names and WHICH TABLE they belong to. The `tms_` "
-        + "prefix exists ONLY in the merged table; TMS and BIS use their bare column "
-        + "names (e.g. `patient_state_name`, not `tms_patient_state_name`). Do not "
-        + "reference a column that isn't in the table you selected."
+        + "Check exact column names and WHICH TABLE they belong to (see the table "
+        + "sections and the AUTHORITATIVE COLUMN TYPES block). Common issues: a date "
+        + "column named differently across tables (created_date vs date_created vs "
+        + "verified_date); DATETIME columns needing DATE(col); joining hosp_id/"
+        + "service_id without stripping the `_N` suffix (see §10). Do not reference a "
+        + "column that isn't in the table you selected."
     )
     try:
         gen = llm.generate_json(system_prompt, fix_prompt)
@@ -298,16 +258,14 @@ def _build_chips(resolved: dict, session_context: dict | None) -> dict:
         chips["period"] = period["label"]
     elif session_context and session_context.get("period_label"):
         chips["period"] = session_context["period_label"]
-    if resolved.get("specialties"):
-        chips["specialty"] = ", ".join(
-            n for s in resolved["specialties"] for n in s["names"]
-        )
     return chips
 
 
 _ANALYSIS_SYSTEM = (
-    "You are a senior data analyst for India's PM-JAY (Ayushman Bharat) health "
-    "scheme. You are given the ACTUAL results of a database query. Analyse the "
+    "You are a senior data analyst for India's ABDM (Ayushman Bharat Digital "
+    "Mission) — health facility/professional registries, ABHA creation, "
+    "health-record linking, and Scan & Share / Scan & Pay adoption. You are "
+    "given the ACTUAL results of a database query. Analyse the "
     "numbers and return a JSON object with keys: "
     '{"summary": string, "insights": string[], "trends": string[]}. '
     "Rules: base EVERY statement strictly on the data provided — cite specific "
