@@ -9,6 +9,10 @@ backend/.pytest_cache/
 # Node / frontend
 frontend/node_modules/
 frontend/dist/
+# Local build config (copy frontend/.env.example -> frontend/.env). Never commit.
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
 
 # Secrets / keys
 *.json.key
@@ -20,3 +24,7 @@ Thumbs.db
 
 # Local data extracts
 backend/*.csv
+
+# Chat-with-PDFs: source PDFs (user/Drive data) and the built index cache
+backend/pdfs/
+backend/pdf_index/
