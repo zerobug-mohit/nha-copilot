@@ -96,6 +96,9 @@ cd frontend
 npm install
 npm run dev                   # http://localhost:5173 (proxies /auth, /chat to :8000)
 ```
+For a **production build** (self-hosting), copy `.env.example` to `.env`, set
+`VITE_API_BASE` (backend URL) and `VITE_BASE` (serving path), then `npm run build`
+→ output in `frontend/dist/`. Full guide: [`deploy/SELF_HOSTING.md`](deploy/SELF_HOSTING.md).
 
 ## Prototype users
 `viewer` / `analyst` / `senior` / `admin`, password = `<username>123`
@@ -124,7 +127,13 @@ cd backend && ./.venv/Scripts/python.exe scripts/eval_model.py
 ```
 
 ## Deployment
-Frontend builds to static files (GitHub Pages). Backend runs as a service behind
-a reverse proxy (see `deploy/`). Set `OPENAI_MODEL`, `APP_USERS`, and the GCP
-credentials via the environment; table names default to the loaded names in
-`app/config.py` and only need overriding if yours differ.
+Frontend builds to static files; backend runs as a service behind a reverse
+proxy. Set `OPENAI_MODEL`, `APP_USERS`, and the GCP credentials via the
+environment; table names default to the loaded names in `app/config.py` and only
+need overriding if yours differ.
+
+- **Self-hosting on your own infrastructure (nginx / IIS / Docker):** see
+  **[`deploy/SELF_HOSTING.md`](deploy/SELF_HOSTING.md)** — a step-by-step,
+  clone-and-build guide. The frontend's two build settings (`VITE_API_BASE` and
+  `VITE_BASE`) come from `frontend/.env` (copy `frontend/.env.example`).
+- **Reference GCP VM + GitHub Pages setup:** see [`deploy/README.md`](deploy/README.md).
