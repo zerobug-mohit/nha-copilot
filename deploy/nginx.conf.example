@@ -1,0 +1,61 @@
+# =============================================================================
+# nginx config for serving the NHA Co-pilot FRONTEND (static files)
+# =============================================================================
+# Copy the built `frontend/dist/` folder to the server (e.g. /var/www/nha-copilot)
+# and put this file at /etc/nginx/conf.d/nha-copilot.conf (adjust paths/host),
+# then:  sudo nginx -t && sudo systemctl reload nginx
+#
+# This covers TWO common layouts. Pick ONE and delete the other.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# LAYOUT A (recommended): frontend + backend on the SAME host/domain.
+# The browser talks to one origin; nginx forwards /api paths to the backend.
+# Build the frontend with VITE_API_BASE EMPTY and VITE_BASE=/  (same-origin).
+# NOTE: the backend routes are /auth /chat /query-log /report /explorer
+#       /pdfchat /health — proxy each, as shown, to the local backend on :8000.
+# -----------------------------------------------------------------------------
+server {
+    listen 80;
+    server_name copilot.nha.internal;          # <-- change to your hostname
+
+    root /var/www/nha-copilot;                  # <-- folder holding dist/ contents
+    index index.html;
+
+    # Serve the SPA. There is no client-side router, but this fallback is safe.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Long-cache the fingerprinted assets (safe: filenames change on rebuild).
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Forward API calls to the backend running on this host.
+    location ~ ^/(auth|chat|query-log|report|explorer|pdfchat|health) {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;               # long LLM/report responses
+    }
+}
+
+
+# -----------------------------------------------------------------------------
+# LAYOUT B: frontend-only host; backend lives on a DIFFERENT URL.
+# Build the frontend with VITE_API_BASE=https://copilot-api.nha.internal and
+# VITE_BASE=/ . You must also add this host to the backend's CORS_ORIGINS.
+# -----------------------------------------------------------------------------
+# server {
+#     listen 80;
+#     server_name copilot.nha.internal;
+#     root /var/www/nha-copilot;
+#     index index.html;
+#     location / { try_files $uri $uri/ /index.html; }
+#     location /assets/ { expires 1y; add_header Cache-Control "public, immutable"; }
+# }
